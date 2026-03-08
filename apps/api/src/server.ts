@@ -15,6 +15,7 @@ import {
   verifyRefreshToken,
 } from "./lib/auth";
 import { requireAuth } from "./middleware/auth";
+import { sendError } from "./lib/http";
 import { buildSlots, overlaps } from "./lib/slots";
 
 const registerSchema = z.object({
@@ -72,20 +73,20 @@ app.get("/health", (_req, res) => {
 app.post("/auth/register", async (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ message: "Invalid payload", issues: parsed.error.flatten() });
+    sendError(res, 400, "INVALID_PAYLOAD", "Invalid payload", parsed.error.flatten());
     return;
   }
 
   const input = parsed.data;
   const existing = await prisma.business.findUnique({ where: { slug: input.businessSlug } });
   if (existing) {
-    res.status(409).json({ message: "Business slug already exists" });
+    sendError(res, 409, "BUSINESS_SLUG_ALREADY_EXISTS", "Business slug already exists");
     return;
   }
 
   const existingUser = await prisma.user.findUnique({ where: { email: input.email } });
   if (existingUser) {
-    res.status(409).json({ message: "Email already exists" });
+    sendError(res, 409, "EMAIL_ALREADY_EXISTS", "Email already exists");
     return;
   }
 
@@ -140,7 +141,7 @@ app.post("/auth/register", async (req, res) => {
 app.post("/auth/login", async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ message: "Invalid payload", issues: parsed.error.flatten() });
+    sendError(res, 400, "INVALID_PAYLOAD", "Invalid payload", parsed.error.flatten());
     return;
   }
 
@@ -151,19 +152,19 @@ app.post("/auth/login", async (req, res) => {
   });
 
   if (!user) {
-    res.status(401).json({ message: "Invalid credentials" });
+    sendError(res, 401, "INVALID_CREDENTIALS", "Invalid credentials");
     return;
   }
 
   const isValid = await comparePassword(input.password, user.passwordHash);
   if (!isValid) {
-    res.status(401).json({ message: "Invalid credentials" });
+    sendError(res, 401, "INVALID_CREDENTIALS", "Invalid credentials");
     return;
   }
 
   const primaryLink = user.businessLinks[0];
   if (!primaryLink) {
-    res.status(403).json({ message: "User is not linked to a business" });
+    sendError(res, 403, "USER_WITHOUT_BUSINESS", "User is not linked to a business");
     return;
   }
 
@@ -188,7 +189,7 @@ app.post("/auth/login", async (req, res) => {
 app.post("/auth/refresh", async (req, res) => {
   const token = req.body?.refreshToken as string | undefined;
   if (!token) {
-    res.status(400).json({ message: "refreshToken is required" });
+    sendError(res, 400, "MISSING_REFRESH_TOKEN", "refreshToken is required");
     return;
   }
 
@@ -205,13 +206,13 @@ app.post("/auth/refresh", async (req, res) => {
     });
 
     if (!tokenRow) {
-      res.status(401).json({ message: "Invalid refresh token" });
+      sendError(res, 401, "INVALID_REFRESH_TOKEN", "Invalid refresh token");
       return;
     }
 
     const businessLink = await prisma.businessUser.findFirst({ where: { userId: payload.sub } });
     if (!businessLink) {
-      res.status(403).json({ message: "No business context found" });
+      sendError(res, 403, "NO_BUSINESS_CONTEXT", "No business context found");
       return;
     }
 
@@ -235,7 +236,7 @@ app.post("/auth/refresh", async (req, res) => {
 
     res.json({ accessToken, refreshToken });
   } catch {
-    res.status(401).json({ message: "Invalid refresh token" });
+    sendError(res, 401, "INVALID_REFRESH_TOKEN", "Invalid refresh token");
   }
 });
 
@@ -250,7 +251,7 @@ app.get("/services", requireAuth, async (req, res) => {
 app.post("/services", requireAuth, async (req, res) => {
   const parsed = serviceSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ message: "Invalid payload", issues: parsed.error.flatten() });
+    sendError(res, 400, "INVALID_PAYLOAD", "Invalid payload", parsed.error.flatten());
     return;
   }
 
@@ -275,12 +276,12 @@ app.get("/availability", requireAuth, async (req, res) => {
 app.post("/availability", requireAuth, async (req, res) => {
   const parsed = availabilitySchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ message: "Invalid payload", issues: parsed.error.flatten() });
+    sendError(res, 400, "INVALID_PAYLOAD", "Invalid payload", parsed.error.flatten());
     return;
   }
 
   if (parsed.data.endTime <= parsed.data.startTime) {
-    res.status(400).json({ message: "endTime must be after startTime" });
+    sendError(res, 400, "INVALID_TIME_RANGE", "endTime must be after startTime");
     return;
   }
 
@@ -309,7 +310,7 @@ app.get("/appointments", requireAuth, async (req, res) => {
   if (typeof rawDate !== "undefined") {
     const parsedDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).safeParse(rawDate);
     if (!parsedDate.success) {
-      res.status(400).json({ message: "Invalid date. Expected YYYY-MM-DD" });
+      sendError(res, 400, "INVALID_DATE_FILTER", "Invalid date. Expected YYYY-MM-DD");
       return;
     }
 
@@ -325,7 +326,7 @@ app.get("/appointments", requireAuth, async (req, res) => {
   if (typeof rawStatus !== "undefined") {
     const parsedStatus = z.nativeEnum(AppointmentStatus).safeParse(rawStatus);
     if (!parsedStatus.success) {
-      res.status(400).json({ message: "Invalid status filter" });
+      sendError(res, 400, "INVALID_STATUS_FILTER", "Invalid status filter");
       return;
     }
 
@@ -367,13 +368,18 @@ app.get("/appointments/slots", async (req, res) => {
   const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).safeParse(req.query.date);
 
   if (!businessSlug.success || !serviceId.success || !date.success) {
-    res.status(400).json({ message: "businessSlug, serviceId and date are required" });
+    sendError(
+      res,
+      400,
+      "INVALID_OR_MISSING_QUERY",
+      "businessSlug, serviceId and date are required",
+    );
     return;
   }
 
   const business = await prisma.business.findUnique({ where: { slug: businessSlug.data } });
   if (!business) {
-    res.status(404).json({ message: "Business not found" });
+    sendError(res, 404, "BUSINESS_NOT_FOUND", "Business not found");
     return;
   }
 
@@ -381,7 +387,7 @@ app.get("/appointments/slots", async (req, res) => {
     where: { id: serviceId.data, businessId: business.id, isActive: true },
   });
   if (!service) {
-    res.status(404).json({ message: "Service not found" });
+    sendError(res, 404, "SERVICE_NOT_FOUND", "Service not found");
     return;
   }
 
@@ -439,14 +445,14 @@ app.get("/appointments/slots", async (req, res) => {
 app.post("/appointments", async (req, res) => {
   const parsed = createAppointmentSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ message: "Invalid payload", issues: parsed.error.flatten() });
+    sendError(res, 400, "INVALID_PAYLOAD", "Invalid payload", parsed.error.flatten());
     return;
   }
 
   const input = parsed.data;
   const business = await prisma.business.findUnique({ where: { slug: input.businessSlug } });
   if (!business) {
-    res.status(404).json({ message: "Business not found" });
+    sendError(res, 404, "BUSINESS_NOT_FOUND", "Business not found");
     return;
   }
 
@@ -454,7 +460,7 @@ app.post("/appointments", async (req, res) => {
     where: { id: input.serviceId, businessId: business.id, isActive: true },
   });
   if (!service) {
-    res.status(404).json({ message: "Service not found" });
+    sendError(res, 404, "SERVICE_NOT_FOUND", "Service not found");
     return;
   }
 
@@ -462,12 +468,12 @@ app.post("/appointments", async (req, res) => {
   const endsAt = new Date(startsAt.getTime() + service.durationMin * 60_000);
 
   if (startsAt <= new Date()) {
-    res.status(400).json({ message: "Appointment must be in the future" });
+    sendError(res, 400, "APPOINTMENT_IN_PAST", "Appointment must be in the future");
     return;
   }
 
   if (startsAt.toISOString().slice(0, 10) !== endsAt.toISOString().slice(0, 10)) {
-    res.status(400).json({ message: "Appointment cannot cross day boundaries" });
+    sendError(res, 400, "APPOINTMENT_CROSSES_DAY", "Appointment cannot cross day boundaries");
     return;
   }
 
@@ -494,7 +500,12 @@ app.post("/appointments", async (req, res) => {
   });
 
   if (!insideAvailability) {
-    res.status(409).json({ message: "Selected slot is outside business availability" });
+    sendError(
+      res,
+      409,
+      "SLOT_OUTSIDE_AVAILABILITY",
+      "Selected slot is outside business availability",
+    );
     return;
   }
 
@@ -508,7 +519,7 @@ app.post("/appointments", async (req, res) => {
   });
 
   if (overlapping) {
-    res.status(409).json({ message: "Selected slot is not available" });
+    sendError(res, 409, "SLOT_NOT_AVAILABLE", "Selected slot is not available");
     return;
   }
 
@@ -560,7 +571,7 @@ app.post("/appointments", async (req, res) => {
 app.patch("/appointments/:id/cancel", requireAuth, async (req, res) => {
   const id = z.string().uuid().safeParse(req.params.id);
   if (!id.success) {
-    res.status(400).json({ message: "Invalid appointment id" });
+    sendError(res, 400, "INVALID_APPOINTMENT_ID", "Invalid appointment id");
     return;
   }
 
@@ -569,7 +580,7 @@ app.patch("/appointments/:id/cancel", requireAuth, async (req, res) => {
   });
 
   if (!appointment) {
-    res.status(404).json({ message: "Appointment not found" });
+    sendError(res, 404, "APPOINTMENT_NOT_FOUND", "Appointment not found");
     return;
   }
 
@@ -583,7 +594,7 @@ app.patch("/appointments/:id/cancel", requireAuth, async (req, res) => {
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);
-  res.status(500).json({ message: "Internal server error" });
+  sendError(res, 500, "INTERNAL_SERVER_ERROR", "Internal server error");
 });
 
 if (process.env.NODE_ENV !== "test") {
