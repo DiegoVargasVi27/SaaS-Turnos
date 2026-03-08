@@ -14,7 +14,7 @@ import {
   signRefreshToken,
   verifyRefreshToken,
 } from "./lib/auth";
-import { requireAuth } from "./middleware/auth";
+import { requireAuth, requireRole } from "./middleware/auth";
 import { sendError } from "./lib/http";
 import { buildSlots, overlaps } from "./lib/slots";
 
@@ -37,6 +37,18 @@ const serviceSchema = z.object({
   priceCents: z.number().int().nonnegative(),
   currency: z.string().length(3).default("USD"),
 });
+
+const updateServiceSchema = z
+  .object({
+    name: z.string().min(2).optional(),
+    durationMin: z.number().int().positive().optional(),
+    priceCents: z.number().int().nonnegative().optional(),
+    currency: z.string().length(3).optional(),
+    isActive: z.boolean().optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "At least one field is required",
+  });
 
 const availabilitySchema = z.object({
   weekday: z.number().int().min(0).max(6),
@@ -252,15 +264,45 @@ app.post("/auth/refresh", asyncHandler(async (req, res) => {
   }
 }));
 
-app.get("/services", requireAuth, asyncHandler(async (req, res) => {
+app.get("/public/services", asyncHandler(async (req, res) => {
+  const businessSlug = z.string().min(3).safeParse(req.query.businessSlug);
+  if (!businessSlug.success) {
+    sendError(res, 400, "INVALID_OR_MISSING_QUERY", "businessSlug is required");
+    return;
+  }
+
+  const business = await prisma.business.findUnique({ where: { slug: businessSlug.data } });
+  if (!business) {
+    sendError(res, 404, "BUSINESS_NOT_FOUND", "Business not found");
+    return;
+  }
+
+  const services = await prisma.service.findMany({
+    where: { businessId: business.id, isActive: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  res.json({ services });
+}));
+
+app.get(
+  "/services",
+  requireAuth,
+  requireRole([Role.OWNER, Role.ADMIN]),
+  asyncHandler(async (req, res) => {
   const services = await prisma.service.findMany({
     where: { businessId: req.auth!.businessId },
     orderBy: { createdAt: "asc" },
   });
   res.json(services);
-}));
+  }),
+);
 
-app.post("/services", requireAuth, asyncHandler(async (req, res) => {
+app.post(
+  "/services",
+  requireAuth,
+  requireRole([Role.OWNER, Role.ADMIN]),
+  asyncHandler(async (req, res) => {
   const parsed = serviceSchema.safeParse(req.body);
   if (!parsed.success) {
     sendError(res, 400, "INVALID_PAYLOAD", "Invalid payload", parsed.error.flatten());
@@ -275,17 +317,89 @@ app.post("/services", requireAuth, asyncHandler(async (req, res) => {
   });
 
   res.status(201).json(service);
-}));
+  }),
+);
 
-app.get("/availability", requireAuth, asyncHandler(async (req, res) => {
+app.patch(
+  "/services/:id",
+  requireAuth,
+  requireRole([Role.OWNER, Role.ADMIN]),
+  asyncHandler(async (req, res) => {
+    const id = z.string().uuid().safeParse(req.params.id);
+    if (!id.success) {
+      sendError(res, 400, "INVALID_SERVICE_ID", "Invalid service id");
+      return;
+    }
+
+    const parsed = updateServiceSchema.safeParse(req.body);
+    if (!parsed.success) {
+      sendError(res, 400, "INVALID_PAYLOAD", "Invalid payload", parsed.error.flatten());
+      return;
+    }
+
+    const existing = await prisma.service.findFirst({
+      where: { id: id.data, businessId: req.auth!.businessId },
+    });
+    if (!existing) {
+      sendError(res, 404, "SERVICE_NOT_FOUND", "Service not found");
+      return;
+    }
+
+    const service = await prisma.service.update({
+      where: { id: id.data },
+      data: parsed.data,
+    });
+
+    res.json(service);
+  }),
+);
+
+app.delete(
+  "/services/:id",
+  requireAuth,
+  requireRole([Role.OWNER, Role.ADMIN]),
+  asyncHandler(async (req, res) => {
+    const id = z.string().uuid().safeParse(req.params.id);
+    if (!id.success) {
+      sendError(res, 400, "INVALID_SERVICE_ID", "Invalid service id");
+      return;
+    }
+
+    const existing = await prisma.service.findFirst({
+      where: { id: id.data, businessId: req.auth!.businessId },
+    });
+    if (!existing) {
+      sendError(res, 404, "SERVICE_NOT_FOUND", "Service not found");
+      return;
+    }
+
+    const service = await prisma.service.update({
+      where: { id: id.data },
+      data: { isActive: false },
+    });
+
+    res.json(service);
+  }),
+);
+
+app.get(
+  "/availability",
+  requireAuth,
+  requireRole([Role.OWNER, Role.ADMIN]),
+  asyncHandler(async (req, res) => {
   const rules = await prisma.availabilityRule.findMany({
     where: { businessId: req.auth!.businessId },
     orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
   });
   res.json(rules);
-}));
+  }),
+);
 
-app.post("/availability", requireAuth, asyncHandler(async (req, res) => {
+app.post(
+  "/availability",
+  requireAuth,
+  requireRole([Role.OWNER, Role.ADMIN]),
+  asyncHandler(async (req, res) => {
   const parsed = availabilitySchema.safeParse(req.body);
   if (!parsed.success) {
     sendError(res, 400, "INVALID_PAYLOAD", "Invalid payload", parsed.error.flatten());
@@ -305,9 +419,14 @@ app.post("/availability", requireAuth, asyncHandler(async (req, res) => {
   });
 
   res.status(201).json(rule);
-}));
+  }),
+);
 
-app.get("/appointments", requireAuth, asyncHandler(async (req, res) => {
+app.get(
+  "/appointments",
+  requireAuth,
+  requireRole([Role.OWNER, Role.ADMIN]),
+  asyncHandler(async (req, res) => {
   const rawDate = Array.isArray(req.query.date) ? req.query.date[0] : req.query.date;
   const rawStatus = Array.isArray(req.query.status) ? req.query.status[0] : req.query.status;
 
@@ -372,7 +491,8 @@ app.get("/appointments", requireAuth, asyncHandler(async (req, res) => {
   });
 
   res.json({ appointments });
-}));
+  }),
+);
 
 app.get("/appointments/slots", asyncHandler(async (req, res) => {
   const businessSlug = z.string().min(3).safeParse(req.query.businessSlug);
@@ -580,7 +700,11 @@ app.post("/appointments", asyncHandler(async (req, res) => {
   res.status(201).json(appointment);
 }));
 
-app.patch("/appointments/:id/cancel", requireAuth, asyncHandler(async (req, res) => {
+app.patch(
+  "/appointments/:id/cancel",
+  requireAuth,
+  requireRole([Role.OWNER, Role.ADMIN]),
+  asyncHandler(async (req, res) => {
   const id = z.string().uuid().safeParse(req.params.id);
   if (!id.success) {
     sendError(res, 400, "INVALID_APPOINTMENT_ID", "Invalid appointment id");
@@ -602,7 +726,8 @@ app.patch("/appointments/:id/cancel", requireAuth, asyncHandler(async (req, res)
   });
 
   res.json(updated);
-}));
+  }),
+);
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);

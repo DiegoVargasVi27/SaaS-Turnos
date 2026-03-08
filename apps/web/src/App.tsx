@@ -1,10 +1,27 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
+import {
+  BrowserRouter,
+  Link,
+  NavLink,
+  Navigate,
+  Route,
+  Routes,
+  useNavigate,
+  useParams,
+} from "react-router-dom";
 import "./App.css";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
 
-type ApiError = { message?: string };
+type Service = {
+  id: string;
+  name: string;
+  durationMin: number;
+  priceCents: number;
+  currency: string;
+  isActive: boolean;
+};
 
 type AppointmentStatusFilter =
   | "ALL"
@@ -32,21 +49,21 @@ type AppointmentItem = {
   };
 };
 
-type StepId = "auth" | "service" | "availability" | "slots" | "agenda";
-type NoticeTone = "info" | "success" | "error";
-
-type StepNotice = {
-  tone: NoticeTone;
-  text: string;
+type ApiErrorPayload = {
+  code?: string;
+  message?: string;
 };
 
-const workflowSteps: Array<{ id: StepId; title: string; helper: string }> = [
-  { id: "auth", title: "Autenticacion", helper: "Registra o inicia sesion" },
-  { id: "service", title: "Servicio", helper: "Define la oferta base" },
-  { id: "availability", title: "Disponibilidad", helper: "Configura bloques horarios" },
-  { id: "slots", title: "Slots", helper: "Valida huecos publicos" },
-  { id: "agenda", title: "Agenda", helper: "Control diario de turnos" },
-];
+type ThemeMode = "light" | "dark";
+
+class ApiRequestError extends Error {
+  code: string;
+
+  constructor(code: string, message: string) {
+    super(message);
+    this.code = code;
+  }
+}
 
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
@@ -58,211 +75,302 @@ async function api<T>(path: string, options?: RequestInit): Promise<T> {
   });
 
   if (!response.ok) {
-    const data = (await response.json().catch(() => ({}))) as ApiError;
-    throw new Error(data.message ?? "Request failed");
+    const payload = (await response.json().catch(() => ({}))) as ApiErrorPayload;
+    throw new ApiRequestError(payload.code ?? "REQUEST_FAILED", payload.message ?? "Request failed");
   }
 
   return response.json() as Promise<T>;
 }
 
-function App() {
-  const [activeStep, setActiveStep] = useState<StepId>("auth");
-  const [accessToken, setAccessToken] = useState("");
-  const [businessSlug, setBusinessSlug] = useState("demo-barberia");
-  const [serviceId, setServiceId] = useState("c8f4f40f-b1ff-4f11-9a0f-9e85d73f3da1");
-  const [slotDate, setSlotDate] = useState(new Date().toISOString().slice(0, 10));
-  const [agendaDate, setAgendaDate] = useState(new Date().toISOString().slice(0, 10));
-  const [agendaStatus, setAgendaStatus] = useState<AppointmentStatusFilter>("ALL");
-  const [slots, setSlots] = useState<string[]>([]);
-  const [appointments, setAppointments] = useState<AppointmentItem[]>([]);
-  const [hasAvailability, setHasAvailability] = useState(false);
+function TopTabs({
+  theme,
+  onToggleTheme,
+}: {
+  theme: ThemeMode;
+  onToggleTheme: () => void;
+}) {
+  return (
+    <nav className="top-tabs" aria-label="Navegacion principal">
+      <NavLink to="/" className={({ isActive }) => (isActive ? "tab-link is-active" : "tab-link")} end>
+        Inicio
+      </NavLink>
+      <NavLink to="/book/demo-barberia" className={({ isActive }) => (isActive ? "tab-link is-active" : "tab-link")}>
+        Booking publico
+      </NavLink>
+      <NavLink to="/login" className={({ isActive }) => (isActive ? "tab-link is-active" : "tab-link")}>
+        Login prestador
+      </NavLink>
+      <NavLink to="/admin" className={({ isActive }) => (isActive ? "tab-link is-active" : "tab-link")}>
+        Admin
+      </NavLink>
+      <button type="button" className="theme-toggle" onClick={onToggleTheme}>
+        {theme === "dark" ? "Tema claro" : "Tema oscuro"}
+      </button>
+    </nav>
+  );
+}
 
-  const [isRegistering, setIsRegistering] = useState(false);
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [isCreatingService, setIsCreatingService] = useState(false);
-  const [isCreatingAvailability, setIsCreatingAvailability] = useState(false);
-  const [isLoadingSlots, setIsLoadingSlots] = useState(false);
-  const [isLoadingAgenda, setIsLoadingAgenda] = useState(false);
-  const [cancellingAppointmentId, setCancellingAppointmentId] = useState<string | null>(null);
+function Home({ theme, onToggleTheme }: { theme: ThemeMode; onToggleTheme: () => void }) {
+  return (
+    <main className="screen">
+      <section className="surface intro">
+        <TopTabs theme={theme} onToggleTheme={onToggleTheme} />
+        <p className="kicker">SaaS Turnos</p>
+        <h1>Flujos separados por pantalla</h1>
+        <p>
+          Cliente final agenda sin cuenta en booking publico. Prestador inicia sesion y opera en
+          admin.
+        </p>
+        <div className="link-row">
+          <Link to="/login" className="link-button">
+            Soy prestador
+          </Link>
+          <Link to="/admin" className="link-button is-muted">
+            Ir a admin
+          </Link>
+          <Link to="/book/demo-barberia" className="link-button is-muted">
+            Quiero reservar
+          </Link>
+        </div>
+      </section>
+    </main>
+  );
+}
 
-  const [status, setStatus] = useState("Listo para operar en modo minimal-tech.");
-  const [notices, setNotices] = useState<Record<StepId, StepNotice | null>>({
-    auth: null,
-    service: null,
-    availability: null,
-    slots: null,
-    agenda: null,
-  });
+function LoginPage({
+  isAuthenticated,
+  onLogin,
+  theme,
+  onToggleTheme,
+}: {
+  isAuthenticated: boolean;
+  onLogin: (token: string) => void;
+  theme: ThemeMode;
+  onToggleTheme: () => void;
+}) {
+  const navigate = useNavigate();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<ApiErrorPayload | null>(null);
 
-  const hasSession = accessToken.trim().length > 0;
-  const hasService = serviceId.trim().length > 0;
-  const hasSlots = slots.length > 0;
-  const hasAgenda = appointments.length > 0;
-
-  const authHeaders = useMemo(() => ({ Authorization: `Bearer ${accessToken}` }), [accessToken]);
-
-  const recommendedStep: StepId = !hasSession
-    ? "auth"
-    : !hasService
-      ? "service"
-      : !hasAvailability
-        ? "availability"
-        : !hasSlots
-          ? "slots"
-          : "agenda";
-
-  function stepDone(stepId: StepId): boolean {
-    if (stepId === "auth") return hasSession;
-    if (stepId === "service") return hasService;
-    if (stepId === "availability") return hasAvailability;
-    if (stepId === "slots") return hasSlots;
-    return hasAgenda;
-  }
-
-  function pushNotice(stepId: StepId, tone: NoticeTone, text: string) {
-    setNotices((current) => ({
-      ...current,
-      [stepId]: { tone, text },
-    }));
-  }
-
-  async function onRegister(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    setIsRegistering(true);
-
-    try {
-      const data = await api<{ accessToken: string }>("/auth/register", {
-        method: "POST",
-        body: JSON.stringify({
-          businessName: form.get("businessName"),
-          businessSlug: form.get("businessSlug"),
-          fullName: form.get("fullName"),
-          email: form.get("email"),
-          password: form.get("password"),
-        }),
-      });
-      setAccessToken(data.accessToken);
-      setStatus("Registro completado. Continua con servicio y disponibilidad.");
-      pushNotice("auth", "success", "Cuenta creada y sesion activa.");
-      setActiveStep("service");
-    } catch (error) {
-      const message = (error as Error).message;
-      setStatus(message);
-      pushNotice("auth", "error", message);
-    } finally {
-      setIsRegistering(false);
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate("/admin", { replace: true });
     }
-  }
+  }, [isAuthenticated, navigate]);
 
-  async function onLogin(event: FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    setIsLoggingIn(true);
+    setLoading(true);
+    setError(null);
 
     try {
       const data = await api<{ accessToken: string }>("/auth/login", {
         method: "POST",
-        body: JSON.stringify({
-          email: form.get("email"),
-          password: form.get("password"),
-        }),
+        body: JSON.stringify({ email, password }),
       });
-      setAccessToken(data.accessToken);
-      setStatus("Sesion iniciada. Ya puedes operar el negocio.");
-      pushNotice("auth", "success", "Sesion iniciada correctamente.");
-      setActiveStep("service");
-    } catch (error) {
-      const message = (error as Error).message;
-      setStatus(message);
-      pushNotice("auth", "error", message);
+
+      onLogin(data.accessToken);
+      navigate("/admin", { replace: true });
+    } catch (unknownError) {
+      const typedError = unknownError as ApiRequestError;
+      setError({ code: typedError.code, message: typedError.message });
     } finally {
-      setIsLoggingIn(false);
+      setLoading(false);
     }
   }
 
-  async function onCreateService(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    setIsCreatingService(true);
+  return (
+    <main className="screen">
+      <section className="surface auth-shell">
+        <TopTabs theme={theme} onToggleTheme={onToggleTheme} />
+        <p className="kicker">Acceso prestador</p>
+        <h1>Inicia sesion</h1>
+        <p>Solo usuarios OWNER o ADMIN pueden operar el panel administrativo.</p>
+
+        <form className="form-grid" onSubmit={onSubmit}>
+          <label className="field">
+            <span>Email</span>
+            <input
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="owner@demo.com"
+              required
+            />
+          </label>
+
+          <label className="field">
+            <span>Contrasena</span>
+            <input
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="admin12345"
+              required
+            />
+          </label>
+
+          <button type="submit" disabled={loading}>
+            {loading ? "Ingresando..." : "Entrar al panel"}
+          </button>
+        </form>
+
+        {error ? (
+          <p className="banner is-error" aria-live="polite">
+            {error.code} - {error.message}
+          </p>
+        ) : null}
+
+        <div className="link-row">
+          <Link to="/book/demo-barberia" className="link-button is-muted">
+            Ver booking publico
+          </Link>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function AdminPage({
+  accessToken,
+  onLogout,
+  theme,
+  onToggleTheme,
+}: {
+  accessToken: string;
+  onLogout: () => void;
+  theme: ThemeMode;
+  onToggleTheme: () => void;
+}) {
+  const [services, setServices] = useState<Service[]>([]);
+  const [loadingServices, setLoadingServices] = useState(true);
+
+  const [serviceName, setServiceName] = useState("");
+  const [serviceDurationMin, setServiceDurationMin] = useState("30");
+  const [servicePriceCents, setServicePriceCents] = useState("1200");
+  const [serviceCurrency, setServiceCurrency] = useState("USD");
+  const [creatingService, setCreatingService] = useState(false);
+  const [disablingServiceId, setDisablingServiceId] = useState<string | null>(null);
+
+  const [weekday, setWeekday] = useState("1");
+  const [startTime, setStartTime] = useState("09:00");
+  const [endTime, setEndTime] = useState("18:00");
+  const [slotIntervalMin, setSlotIntervalMin] = useState("30");
+  const [savingAvailability, setSavingAvailability] = useState(false);
+
+  const [agendaDate, setAgendaDate] = useState(new Date().toISOString().slice(0, 10));
+  const [agendaStatus, setAgendaStatus] = useState<AppointmentStatusFilter>("ALL");
+  const [appointments, setAppointments] = useState<AppointmentItem[]>([]);
+  const [loadingAgenda, setLoadingAgenda] = useState(false);
+  const [cancellingAppointmentId, setCancellingAppointmentId] = useState<string | null>(null);
+
+  const [notice, setNotice] = useState<{ tone: "success" | "error" | "info"; text: string } | null>(
+    null,
+  );
+
+  const authHeaders = useMemo(
+    () => ({ Authorization: `Bearer ${accessToken}` }),
+    [accessToken],
+  );
+
+  async function loadServices() {
+    setLoadingServices(true);
 
     try {
-      const data = await api<{ id: string }>("/services", {
+      const data = await api<Service[]>("/services", { headers: authHeaders });
+      setServices(data);
+    } catch (unknownError) {
+      const typedError = unknownError as ApiRequestError;
+      setNotice({ tone: "error", text: `${typedError.code} - ${typedError.message}` });
+    } finally {
+      setLoadingServices(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadServices();
+  }, []);
+
+  async function onCreateService(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setCreatingService(true);
+    setNotice(null);
+
+    try {
+      await api<Service>("/services", {
         method: "POST",
         headers: authHeaders,
         body: JSON.stringify({
-          name: form.get("name"),
-          durationMin: Number(form.get("durationMin")),
-          priceCents: Number(form.get("priceCents")),
-          currency: form.get("currency"),
+          name: serviceName,
+          durationMin: Number(serviceDurationMin),
+          priceCents: Number(servicePriceCents),
+          currency: serviceCurrency,
         }),
       });
-      setServiceId(data.id);
-      setStatus(`Servicio listo. Nuevo serviceId: ${data.id}`);
-      pushNotice("service", "success", "Servicio creado y vinculado al flujo.");
-      setActiveStep("availability");
-    } catch (error) {
-      const message = (error as Error).message;
-      setStatus(message);
-      pushNotice("service", "error", message);
+
+      setServiceName("");
+      setServiceDurationMin("30");
+      setServicePriceCents("1200");
+      setServiceCurrency("USD");
+      setNotice({ tone: "success", text: "Servicio creado correctamente." });
+      await loadServices();
+    } catch (unknownError) {
+      const typedError = unknownError as ApiRequestError;
+      setNotice({ tone: "error", text: `${typedError.code} - ${typedError.message}` });
     } finally {
-      setIsCreatingService(false);
+      setCreatingService(false);
+    }
+  }
+
+  async function onDisableService(serviceId: string) {
+    setDisablingServiceId(serviceId);
+    setNotice(null);
+
+    try {
+      await api<Service>(`/services/${serviceId}`, {
+        method: "DELETE",
+        headers: authHeaders,
+      });
+      setNotice({ tone: "info", text: "Servicio desactivado (isActive=false)." });
+      await loadServices();
+    } catch (unknownError) {
+      const typedError = unknownError as ApiRequestError;
+      setNotice({ tone: "error", text: `${typedError.code} - ${typedError.message}` });
+    } finally {
+      setDisablingServiceId(null);
     }
   }
 
   async function onCreateAvailability(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    setIsCreatingAvailability(true);
+    setSavingAvailability(true);
+    setNotice(null);
 
     try {
       await api("/availability", {
         method: "POST",
         headers: authHeaders,
         body: JSON.stringify({
-          weekday: Number(form.get("weekday")),
-          startTime: form.get("startTime"),
-          endTime: form.get("endTime"),
-          slotIntervalMin: Number(form.get("slotIntervalMin")),
+          weekday: Number(weekday),
+          startTime,
+          endTime,
+          slotIntervalMin: Number(slotIntervalMin),
         }),
       });
-      setHasAvailability(true);
-      setStatus("Disponibilidad guardada. Continua con validacion de slots.");
-      pushNotice("availability", "success", "Horario publicado correctamente.");
-      setActiveStep("slots");
-    } catch (error) {
-      const message = (error as Error).message;
-      setStatus(message);
-      pushNotice("availability", "error", message);
+      setNotice({ tone: "success", text: "Disponibilidad guardada." });
+    } catch (unknownError) {
+      const typedError = unknownError as ApiRequestError;
+      setNotice({ tone: "error", text: `${typedError.code} - ${typedError.message}` });
     } finally {
-      setIsCreatingAvailability(false);
+      setSavingAvailability(false);
     }
   }
 
-  async function onLoadSlots() {
-    setIsLoadingSlots(true);
-
-    try {
-      const data = await api<{ slots: string[] }>(
-        `/appointments/slots?businessSlug=${encodeURIComponent(businessSlug)}&serviceId=${encodeURIComponent(serviceId)}&date=${encodeURIComponent(slotDate)}`,
-      );
-      setSlots(data.slots);
-      setStatus(`Slots encontrados: ${data.slots.length}`);
-      pushNotice("slots", "success", `Se cargaron ${data.slots.length} slots.`);
-      if (data.slots.length > 0) {
-        setActiveStep("agenda");
-      }
-    } catch (error) {
-      const message = (error as Error).message;
-      setStatus(message);
-      pushNotice("slots", "error", message);
-    } finally {
-      setIsLoadingSlots(false);
-    }
-  }
-
-  async function onLoadAppointments() {
-    setIsLoadingAgenda(true);
+  async function onLoadAgenda() {
+    setLoadingAgenda(true);
+    setNotice(null);
 
     try {
       const params = new URLSearchParams({ date: agendaDate });
@@ -275,19 +383,18 @@ function App() {
       });
 
       setAppointments(data.appointments);
-      setStatus(`Turnos cargados: ${data.appointments.length}`);
-      pushNotice("agenda", "success", `Agenda actualizada con ${data.appointments.length} turnos.`);
-    } catch (error) {
-      const message = (error as Error).message;
-      setStatus(message);
-      pushNotice("agenda", "error", message);
+      setNotice({ tone: "success", text: `Agenda cargada: ${data.appointments.length} turnos.` });
+    } catch (unknownError) {
+      const typedError = unknownError as ApiRequestError;
+      setNotice({ tone: "error", text: `${typedError.code} - ${typedError.message}` });
     } finally {
-      setIsLoadingAgenda(false);
+      setLoadingAgenda(false);
     }
   }
 
   async function onCancelAppointment(appointmentId: string) {
     setCancellingAppointmentId(appointmentId);
+    setNotice(null);
 
     try {
       await api(`/appointments/${appointmentId}/cancel`, {
@@ -300,346 +407,605 @@ function App() {
           appointment.id === appointmentId ? { ...appointment, status: "CANCELLED" } : appointment,
         ),
       );
-      setStatus("Turno cancelado correctamente.");
-      pushNotice("agenda", "info", "Se actualizo el estado del turno a CANCELLED.");
-    } catch (error) {
-      const message = (error as Error).message;
-      setStatus(message);
-      pushNotice("agenda", "error", message);
+
+      setNotice({ tone: "info", text: "Turno cancelado correctamente." });
+    } catch (unknownError) {
+      const typedError = unknownError as ApiRequestError;
+      setNotice({ tone: "error", text: `${typedError.code} - ${typedError.message}` });
     } finally {
       setCancellingAppointmentId(null);
     }
   }
 
-  const completedSteps = workflowSteps.reduce((accumulator, step) => {
-    return accumulator + (stepDone(step.id) ? 1 : 0);
-  }, 0);
+  return (
+    <main className="screen">
+      <section className="surface admin-shell">
+        <TopTabs theme={theme} onToggleTheme={onToggleTheme} />
+        <header className="admin-header">
+          <div>
+            <p className="kicker">Admin panel</p>
+            <h1>Operacion del negocio</h1>
+            <p>Gestion de servicios, disponibilidad y agenda diaria.</p>
+          </div>
+          <div className="link-row">
+            <Link to="/book/demo-barberia" className="link-button is-muted">
+              Ver booking
+            </Link>
+            <button type="button" className="danger-button" onClick={onLogout}>
+              Cerrar sesion
+            </button>
+          </div>
+        </header>
+
+        {notice ? (
+          <p className={`banner ${notice.tone === "error" ? "is-error" : notice.tone === "success" ? "is-success" : "is-info"}`}>
+            {notice.text}
+          </p>
+        ) : null}
+
+        <section className="admin-grid">
+          <article className="panel">
+            <h2>Servicios</h2>
+            <form className="form-grid" onSubmit={onCreateService}>
+              <label className="field">
+                <span>Nombre</span>
+                <input
+                  value={serviceName}
+                  onChange={(event) => setServiceName(event.target.value)}
+                  placeholder="Corte clasico"
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>Duracion (min)</span>
+                <input
+                  type="number"
+                  min={5}
+                  value={serviceDurationMin}
+                  onChange={(event) => setServiceDurationMin(event.target.value)}
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>Precio (centavos)</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={servicePriceCents}
+                  onChange={(event) => setServicePriceCents(event.target.value)}
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>Moneda</span>
+                <input
+                  maxLength={3}
+                  value={serviceCurrency}
+                  onChange={(event) => setServiceCurrency(event.target.value.toUpperCase())}
+                  required
+                />
+              </label>
+              <button type="submit" disabled={creatingService}>
+                {creatingService ? "Guardando..." : "Crear servicio"}
+              </button>
+            </form>
+
+            <div className="list-stack">
+              {loadingServices ? <p className="muted">Cargando servicios...</p> : null}
+              {!loadingServices && services.length === 0 ? (
+                <p className="muted">No hay servicios aun.</p>
+              ) : null}
+
+              {services.map((service) => (
+                <div key={service.id} className="list-row">
+                  <div>
+                    <strong>{service.name}</strong>
+                    <small>
+                      {service.durationMin} min - {(service.priceCents / 100).toFixed(2)} {service.currency}
+                    </small>
+                  </div>
+                  <div className="row-actions">
+                    <span className={service.isActive ? "tag is-success" : "tag"}>
+                      {service.isActive ? "Activo" : "Inactivo"}
+                    </span>
+                    {service.isActive ? (
+                      <button
+                        type="button"
+                        className="danger-button"
+                        disabled={disablingServiceId === service.id}
+                        onClick={() => onDisableService(service.id)}
+                      >
+                        {disablingServiceId === service.id ? "Desactivando..." : "Desactivar"}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </article>
+
+          <article className="panel">
+            <h2>Disponibilidad</h2>
+            <form className="form-grid" onSubmit={onCreateAvailability}>
+              <label className="field">
+                <span>Dia (0-6)</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={6}
+                  value={weekday}
+                  onChange={(event) => setWeekday(event.target.value)}
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>Inicio</span>
+                <input type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} required />
+              </label>
+              <label className="field">
+                <span>Fin</span>
+                <input type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} required />
+              </label>
+              <label className="field">
+                <span>Intervalo (min)</span>
+                <input
+                  type="number"
+                  min={5}
+                  value={slotIntervalMin}
+                  onChange={(event) => setSlotIntervalMin(event.target.value)}
+                  required
+                />
+              </label>
+              <button type="submit" disabled={savingAvailability}>
+                {savingAvailability ? "Guardando..." : "Guardar horario"}
+              </button>
+            </form>
+          </article>
+
+          <article className="panel panel-wide">
+            <h2>Agenda diaria</h2>
+            <div className="agenda-controls">
+              <label className="field">
+                <span>Fecha</span>
+                <input
+                  type="date"
+                  value={agendaDate}
+                  onChange={(event) => setAgendaDate(event.target.value)}
+                />
+              </label>
+              <label className="field">
+                <span>Estado</span>
+                <select
+                  value={agendaStatus}
+                  onChange={(event) => setAgendaStatus(event.target.value as AppointmentStatusFilter)}
+                >
+                  <option value="ALL">Todos</option>
+                  <option value="PENDING">Pendiente</option>
+                  <option value="CONFIRMED">Confirmado</option>
+                  <option value="CANCELLED">Cancelado</option>
+                  <option value="COMPLETED">Completado</option>
+                  <option value="NO_SHOW">No show</option>
+                </select>
+              </label>
+              <button type="button" onClick={onLoadAgenda} disabled={loadingAgenda}>
+                {loadingAgenda ? "Cargando..." : "Cargar agenda"}
+              </button>
+            </div>
+
+            <ul className="agenda-list">
+              {appointments.length === 0 ? <li className="muted">Sin turnos para el filtro actual.</li> : null}
+              {appointments.map((appointment) => {
+                const canCancel =
+                  appointment.status === "CONFIRMED" || appointment.status === "PENDING";
+
+                return (
+                  <li key={appointment.id} className="agenda-item">
+                    <strong>
+                      {new Date(appointment.startsAt).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </strong>
+                    <span>{appointment.service.name}</span>
+                    <span>{appointment.clientUser.fullName}</span>
+                    <span className={`tag status-${appointment.status.toLowerCase()}`}>
+                      {appointment.status}
+                    </span>
+                    {canCancel ? (
+                      <button
+                        type="button"
+                        className="danger-button"
+                        disabled={cancellingAppointmentId === appointment.id}
+                        onClick={() => onCancelAppointment(appointment.id)}
+                      >
+                        {cancellingAppointmentId === appointment.id ? "Cancelando..." : "Cancelar"}
+                      </button>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+          </article>
+        </section>
+      </section>
+    </main>
+  );
+}
+
+function PublicBookingPage({
+  theme,
+  onToggleTheme,
+}: {
+  theme: ThemeMode;
+  onToggleTheme: () => void;
+}) {
+  const params = useParams();
+  const businessSlug = params.businessSlug ?? "";
+  const today = new Date().toISOString().slice(0, 10);
+
+  const [services, setServices] = useState<Service[]>([]);
+  const [loadingServices, setLoadingServices] = useState(true);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [booking, setBooking] = useState(false);
+
+  const [serviceId, setServiceId] = useState("");
+  const [date, setDate] = useState(today);
+  const [slots, setSlots] = useState<string[]>([]);
+  const [selectedSlot, setSelectedSlot] = useState("");
+
+  const [clientName, setClientName] = useState("");
+  const [clientEmail, setClientEmail] = useState("");
+  const [clientPhone, setClientPhone] = useState("");
+
+  const [error, setError] = useState<ApiErrorPayload | null>(null);
+  const [confirmationId, setConfirmationId] = useState("");
+
+  const selectedService = useMemo(
+    () => services.find((service) => service.id === serviceId),
+    [serviceId, services],
+  );
+
+  useEffect(() => {
+    if (!businessSlug) {
+      setError({ code: "INVALID_BUSINESS_SLUG", message: "Business slug no valido." });
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadServices() {
+      setLoadingServices(true);
+      setError(null);
+
+      try {
+        const data = await api<{ services: Service[] }>(
+          `/public/services?businessSlug=${encodeURIComponent(businessSlug)}`,
+        );
+
+        if (!cancelled) {
+          setServices(data.services);
+          if (data.services.length > 0) {
+            setServiceId((current) => current || data.services[0].id);
+          }
+        }
+      } catch (unknownError) {
+        if (!cancelled) {
+          const typedError = unknownError as ApiRequestError;
+          setError({ code: typedError.code, message: typedError.message });
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingServices(false);
+        }
+      }
+    }
+
+    void loadServices();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [businessSlug]);
+
+  useEffect(() => {
+    if (!serviceId || !date || !businessSlug) {
+      setSlots([]);
+      setSelectedSlot("");
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadSlots() {
+      setLoadingSlots(true);
+      setError(null);
+
+      try {
+        const data = await api<{ slots: string[] }>(
+          `/appointments/slots?businessSlug=${encodeURIComponent(businessSlug)}&serviceId=${encodeURIComponent(serviceId)}&date=${encodeURIComponent(date)}`,
+        );
+
+        if (!cancelled) {
+          setSlots(data.slots);
+          setSelectedSlot("");
+        }
+      } catch (unknownError) {
+        if (!cancelled) {
+          const typedError = unknownError as ApiRequestError;
+          setError({ code: typedError.code, message: typedError.message });
+          setSlots([]);
+          setSelectedSlot("");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingSlots(false);
+        }
+      }
+    }
+
+    void loadSlots();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [businessSlug, date, serviceId]);
+
+  async function onConfirmBooking() {
+    if (!selectedSlot) {
+      setError({ code: "SLOT_REQUIRED", message: "Selecciona un horario para continuar." });
+      return;
+    }
+
+    if (!clientName || !clientEmail) {
+      setError({ code: "CLIENT_REQUIRED", message: "Completa nombre y email para confirmar." });
+      return;
+    }
+
+    setBooking(true);
+    setError(null);
+
+    try {
+      const data = await api<{ id: string }>("/appointments", {
+        method: "POST",
+        body: JSON.stringify({
+          businessSlug,
+          serviceId,
+          startsAt: selectedSlot,
+          clientName,
+          clientEmail,
+          clientPhone: clientPhone || undefined,
+        }),
+      });
+
+      setConfirmationId(data.id);
+      setSelectedSlot("");
+      setClientPhone("");
+    } catch (unknownError) {
+      const typedError = unknownError as ApiRequestError;
+      setError({ code: typedError.code, message: typedError.message });
+    } finally {
+      setBooking(false);
+    }
+  }
+
+  const canConfirm = Boolean(serviceId && date && selectedSlot && clientName && clientEmail);
 
   return (
-    <main className="page">
-      <header className="topbar">
-        <p className="eyebrow">SaaS Turnos / Minimal Tech Console</p>
-        <h1>Opera tu negocio por flujo, no por friccion.</h1>
-        <div className="topbar-meta">
-          <span className={hasSession ? "chip is-on" : "chip"}>
-            {hasSession ? "Sesion activa" : "Sin sesion"}
-          </span>
-          <span className="chip">{completedSteps}/5 pasos</span>
-          <span className="chip">API {API_URL}</span>
-        </div>
-        <p className="status" aria-live="polite">
-          {status}
-        </p>
-      </header>
+    <main className="screen">
+      <section className="surface booking-shell">
+        <TopTabs theme={theme} onToggleTheme={onToggleTheme} />
+        <header className="booking-header">
+          <p className="kicker">Reserva publica</p>
+          <h1>{businessSlug}</h1>
+          <p>Sin cuenta ni login. Reserva en 4 pasos: servicio, fecha, horario y confirmacion.</p>
+        </header>
 
-      <div className="shell">
-        <aside className="rail rail-left">
-          <h2>Flujo operativo</h2>
-          <ol className="stepper">
-            {workflowSteps.map((step, index) => {
-              const done = stepDone(step.id);
-              const active = activeStep === step.id;
-              const recommended = recommendedStep === step.id;
+        <ol className="progress-strip" aria-label="Pasos de reserva">
+          <li className={serviceId ? "is-done" : "is-active"}>1. Servicio</li>
+          <li className={date ? "is-done" : serviceId ? "is-active" : ""}>2. Fecha</li>
+          <li className={selectedSlot ? "is-done" : date ? "is-active" : ""}>3. Horario</li>
+          <li className={confirmationId ? "is-done" : selectedSlot ? "is-active" : ""}>4. Confirmar</li>
+        </ol>
 
-              return (
-                <li key={step.id}>
-                  <button
-                    type="button"
-                    className={[
-                      "step",
-                      active ? "is-active" : "",
-                      done ? "is-done" : "",
-                      recommended ? "is-recommended" : "",
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
-                    onClick={() => setActiveStep(step.id)}
-                  >
-                    <span className="step-index">{String(index + 1).padStart(2, "0")}</span>
-                    <span className="step-copy">
-                      <strong>{step.title}</strong>
-                      <small>{step.helper}</small>
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ol>
-        </aside>
+        <section className="booking-grid">
+          <article className="panel">
+            <h2>1. Elige servicio</h2>
+            {loadingServices ? <p className="muted">Cargando servicios...</p> : null}
+            {!loadingServices && services.length === 0 ? (
+              <p className="muted">No hay servicios activos para este negocio.</p>
+            ) : null}
 
-        <section className="workspace">
-          {activeStep === "auth" ? (
-            <section className="panel-grid two-columns">
-              <form className="card" onSubmit={onRegister}>
-                <h3>Registro</h3>
-                <p className="card-hint">Crea el negocio y obtiene token en la misma accion.</p>
-                <label className="field">
-                  <span>Nombre del negocio</span>
-                  <input name="businessName" placeholder="Barberia Central" required />
-                </label>
-                <label className="field">
-                  <span>Slug publico del negocio</span>
-                  <input
-                    name="businessSlug"
-                    placeholder="barberia-central"
-                    value={businessSlug}
-                    onChange={(event) => setBusinessSlug(event.target.value)}
-                    required
-                  />
-                </label>
-                <label className="field">
-                  <span>Nombre del administrador</span>
-                  <input name="fullName" placeholder="Diego Perez" required />
-                </label>
-                <label className="field">
-                  <span>Email</span>
-                  <input name="email" type="email" placeholder="admin@demo.com" required />
-                </label>
-                <label className="field">
-                  <span>Contrasena</span>
-                  <input name="password" type="password" placeholder="Minimo 8 caracteres" required />
-                </label>
-                <button type="submit" disabled={isRegistering}>
-                  {isRegistering ? "Creando cuenta..." : "Crear cuenta"}
+            <div className="service-list">
+              {services.map((service) => (
+                <button
+                  key={service.id}
+                  type="button"
+                  className={service.id === serviceId ? "service-chip is-selected" : "service-chip"}
+                  onClick={() => {
+                    setServiceId(service.id);
+                    setConfirmationId("");
+                  }}
+                >
+                  <strong>{service.name}</strong>
+                  <small>
+                    {service.durationMin} min - {(service.priceCents / 100).toFixed(2)} {service.currency}
+                  </small>
                 </button>
-              </form>
+              ))}
+            </div>
+          </article>
 
-              <form className="card" onSubmit={onLogin}>
-                <h3>Login</h3>
-                <p className="card-hint">Usalo con credenciales del seed o de tu registro.</p>
-                <label className="field">
-                  <span>Email</span>
-                  <input name="email" type="email" placeholder="owner@demo.com" required />
-                </label>
-                <label className="field">
-                  <span>Contrasena</span>
-                  <input name="password" type="password" placeholder="admin12345" required />
-                </label>
-                <button type="submit" disabled={isLoggingIn}>
-                  {isLoggingIn ? "Iniciando sesion..." : "Iniciar sesion"}
+          <article className="panel">
+            <h2>2. Elige fecha</h2>
+            <label className="field">
+              <span>Fecha de reserva</span>
+              <input
+                type="date"
+                value={date}
+                min={today}
+                onChange={(event) => {
+                  setDate(event.target.value);
+                  setConfirmationId("");
+                }}
+              />
+            </label>
+            {selectedService ? (
+              <p className="muted">
+                Servicio activo: <strong>{selectedService.name}</strong>
+              </p>
+            ) : null}
+          </article>
+
+          <article className="panel">
+            <h2>3. Elige horario</h2>
+            {loadingSlots ? <p className="muted">Buscando horarios disponibles...</p> : null}
+            {!loadingSlots && slots.length === 0 ? (
+              <p className="muted">No hay horarios disponibles para esa fecha.</p>
+            ) : null}
+
+            <div className="slot-grid">
+              {slots.map((slot) => (
+                <button
+                  key={slot}
+                  type="button"
+                  className={slot === selectedSlot ? "slot-button is-selected" : "slot-button"}
+                  onClick={() => {
+                    setSelectedSlot(slot);
+                    setConfirmationId("");
+                  }}
+                >
+                  {new Date(slot).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                 </button>
-                {notices.auth ? (
-                  <p className={`module-status ${`is-${notices.auth.tone}`}`}>{notices.auth.text}</p>
-                ) : null}
-              </form>
-            </section>
-          ) : null}
+              ))}
+            </div>
+          </article>
 
-          {activeStep === "service" ? (
-            <section className="panel-grid">
-              <form className="card" onSubmit={onCreateService}>
-                <h3>Crear servicio</h3>
-                <p className="card-hint">Define la unidad comercial que luego reservan tus clientes.</p>
-                <label className="field">
-                  <span>Nombre del servicio</span>
-                  <input name="name" placeholder="Corte clasico" required />
-                </label>
-                <label className="field">
-                  <span>Duracion (minutos)</span>
-                  <input name="durationMin" type="number" min={5} placeholder="30" required />
-                </label>
-                <label className="field">
-                  <span>Precio en centavos</span>
-                  <input name="priceCents" type="number" min={0} placeholder="1200" required />
-                </label>
-                <label className="field">
-                  <span>Moneda</span>
-                  <input name="currency" defaultValue="USD" maxLength={3} required />
-                </label>
-                <button type="submit" disabled={!hasSession || isCreatingService}>
-                  {isCreatingService ? "Guardando servicio..." : "Guardar servicio"}
-                </button>
-                {!hasSession ? <p className="card-hint">Inicia sesion para habilitar este paso.</p> : null}
-                {notices.service ? (
-                  <p className={`module-status ${`is-${notices.service.tone}`}`}>{notices.service.text}</p>
-                ) : null}
-              </form>
-            </section>
-          ) : null}
-
-          {activeStep === "availability" ? (
-            <section className="panel-grid">
-              <form className="card" onSubmit={onCreateAvailability}>
-                <h3>Configurar disponibilidad</h3>
-                <p className="card-hint">Publica bloques de atencion para generar slots reservables.</p>
-                <label className="field">
-                  <span>Dia de semana (0 domingo - 6 sabado)</span>
-                  <input name="weekday" type="number" min={0} max={6} placeholder="1" required />
-                </label>
-                <label className="field">
-                  <span>Hora inicio</span>
-                  <input name="startTime" type="time" defaultValue="09:00" required />
-                </label>
-                <label className="field">
-                  <span>Hora fin</span>
-                  <input name="endTime" type="time" defaultValue="18:00" required />
-                </label>
-                <label className="field">
-                  <span>Intervalo entre slots (minutos)</span>
-                  <input name="slotIntervalMin" type="number" min={5} defaultValue={30} required />
-                </label>
-                <button type="submit" disabled={!hasSession || isCreatingAvailability}>
-                  {isCreatingAvailability ? "Guardando horario..." : "Guardar horario"}
-                </button>
-                {!hasSession ? <p className="card-hint">Inicia sesion para habilitar este paso.</p> : null}
-                {notices.availability ? (
-                  <p className={`module-status ${`is-${notices.availability.tone}`}`}>
-                    {notices.availability.text}
-                  </p>
-                ) : null}
-              </form>
-            </section>
-          ) : null}
-
-          {activeStep === "slots" ? (
-            <section className="panel-grid">
-              <section className="card">
-                <h3>Consulta de slots</h3>
-                <p className="card-hint">
-                  Requiere <code>businessSlug</code> y <code>serviceId</code> validos.
-                </p>
-                <div className="inline-fields">
-                  <label className="field">
-                    <span>Service ID</span>
-                    <input
-                      value={serviceId}
-                      onChange={(event) => setServiceId(event.target.value)}
-                      placeholder="service uuid"
-                    />
-                  </label>
-                  <label className="field">
-                    <span>Fecha</span>
-                    <input
-                      type="date"
-                      value={slotDate}
-                      onChange={(event) => setSlotDate(event.target.value)}
-                    />
-                  </label>
-                  <button type="button" onClick={onLoadSlots} disabled={isLoadingSlots}>
-                    {isLoadingSlots ? "Cargando..." : "Cargar slots"}
-                  </button>
-                </div>
-                <ul className="slot-list">
-                  {slots.length === 0 ? <li>Sin resultados por ahora.</li> : null}
-                  {slots.map((slot) => (
-                    <li key={slot}>{new Date(slot).toLocaleString()}</li>
-                  ))}
-                </ul>
-                {notices.slots ? (
-                  <p className={`module-status ${`is-${notices.slots.tone}`}`}>{notices.slots.text}</p>
-                ) : null}
-              </section>
-            </section>
-          ) : null}
-
-          {activeStep === "agenda" ? (
-            <section className="panel-grid">
-              <section className="card">
-                <h3>Agenda diaria</h3>
-                <p className="card-hint">Vista operativa por fecha y estado para gestionar turnos.</p>
-                <div className="inline-fields">
-                  <label className="field">
-                    <span>Fecha</span>
-                    <input
-                      type="date"
-                      value={agendaDate}
-                      onChange={(event) => setAgendaDate(event.target.value)}
-                    />
-                  </label>
-                  <label className="field">
-                    <span>Estado</span>
-                    <select
-                      value={agendaStatus}
-                      onChange={(event) => setAgendaStatus(event.target.value as AppointmentStatusFilter)}
-                    >
-                      <option value="ALL">Todos</option>
-                      <option value="PENDING">Pendiente</option>
-                      <option value="CONFIRMED">Confirmado</option>
-                      <option value="CANCELLED">Cancelado</option>
-                      <option value="COMPLETED">Completado</option>
-                      <option value="NO_SHOW">No show</option>
-                    </select>
-                  </label>
-                  <button type="button" disabled={!hasSession || isLoadingAgenda} onClick={onLoadAppointments}>
-                    {isLoadingAgenda ? "Cargando..." : "Cargar agenda"}
-                  </button>
-                </div>
-                {!hasSession ? <p className="card-hint">Necesitas iniciar sesion para consultar agenda.</p> : null}
-                <ul className="appointment-timeline">
-                  {appointments.length === 0 ? <li className="empty-item">Sin turnos para el filtro actual.</li> : null}
-                  {appointments.map((appointment) => {
-                    const canCancel =
-                      appointment.status === "CONFIRMED" || appointment.status === "PENDING";
-
-                    return (
-                      <li key={appointment.id} className="appointment-item">
-                        <span className="appointment-time">
-                          {new Date(appointment.startsAt).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
-                        <div className="appointment-main">
-                          <p>
-                            <strong>{appointment.service.name}</strong> - {appointment.clientUser.fullName}
-                          </p>
-                          <span className={`appointment-badge status-${appointment.status.toLowerCase()}`}>
-                            {appointment.status}
-                          </span>
-                        </div>
-                        {canCancel ? (
-                          <button
-                            className="inline-action"
-                            type="button"
-                            disabled={cancellingAppointmentId === appointment.id}
-                            onClick={() => onCancelAppointment(appointment.id)}
-                          >
-                            {cancellingAppointmentId === appointment.id ? "Cancelando..." : "Cancelar"}
-                          </button>
-                        ) : null}
-                      </li>
-                    );
-                  })}
-                </ul>
-                {notices.agenda ? (
-                  <p className={`module-status ${`is-${notices.agenda.tone}`}`}>{notices.agenda.text}</p>
-                ) : null}
-              </section>
-            </section>
-          ) : null}
+          <article className="panel">
+            <h2>4. Confirma reserva</h2>
+            <div className="form-grid">
+              <label className="field">
+                <span>Nombre</span>
+                <input
+                  value={clientName}
+                  onChange={(event) => setClientName(event.target.value)}
+                  placeholder="Tu nombre"
+                />
+              </label>
+              <label className="field">
+                <span>Email</span>
+                <input
+                  type="email"
+                  value={clientEmail}
+                  onChange={(event) => setClientEmail(event.target.value)}
+                  placeholder="tu@email.com"
+                />
+              </label>
+              <label className="field">
+                <span>Telefono (opcional)</span>
+                <input
+                  value={clientPhone}
+                  onChange={(event) => setClientPhone(event.target.value)}
+                  placeholder="+54..."
+                />
+              </label>
+            </div>
+            <button type="button" disabled={!canConfirm || booking} onClick={onConfirmBooking}>
+              {booking ? "Confirmando..." : "Confirmar turno"}
+            </button>
+            {confirmationId ? (
+              <p className="banner is-success" aria-live="polite">
+                Turno confirmado. ID: {confirmationId}
+              </p>
+            ) : null}
+          </article>
         </section>
 
-        <aside className="rail rail-right">
-          <h2>Panel rapido</h2>
-          <div className="mini-metric">
-            <span>Business slug</span>
-            <strong>{businessSlug}</strong>
-          </div>
-          <div className="mini-metric">
-            <span>Service ID activo</span>
-            <strong>{serviceId.slice(0, 8)}...</strong>
-          </div>
-          <div className="mini-metric">
-            <span>Slots cargados</span>
-            <strong>{slots.length}</strong>
-          </div>
-          <div className="mini-metric">
-            <span>Turnos visibles</span>
-            <strong>{appointments.length}</strong>
-          </div>
+        {error ? (
+          <p className="banner is-error" aria-live="polite">
+            {error.code} - {error.message}
+          </p>
+        ) : null}
 
-          <h3>Ultimo estado por paso</h3>
-          <ul className="notice-list">
-            {workflowSteps.map((step) => (
-              <li key={step.id}>
-                <p>{step.title}</p>
-                <small>{notices[step.id]?.text ?? "Sin eventos recientes."}</small>
-              </li>
-            ))}
-          </ul>
-        </aside>
-      </div>
+        <div className="link-row">
+          <Link to="/login" className="link-button is-muted">
+            Soy prestador: login
+          </Link>
+        </div>
+      </section>
     </main>
+  );
+}
+
+function AppRoutes() {
+  const [accessToken, setAccessToken] = useState(() => localStorage.getItem("accessToken") ?? "");
+  const [theme, setTheme] = useState<ThemeMode>(
+    () => (localStorage.getItem("themeMode") as ThemeMode | null) ?? "light",
+  );
+  const isAuthenticated = accessToken.length > 0;
+
+  useEffect(() => {
+    document.body.classList.toggle("theme-dark", theme === "dark");
+    localStorage.setItem("themeMode", theme);
+  }, [theme]);
+
+  function onToggleTheme() {
+    setTheme((current) => (current === "light" ? "dark" : "light"));
+  }
+
+  function onLogin(token: string) {
+    setAccessToken(token);
+    localStorage.setItem("accessToken", token);
+  }
+
+  function onLogout() {
+    setAccessToken("");
+    localStorage.removeItem("accessToken");
+  }
+
+  return (
+    <Routes>
+      <Route path="/" element={<Home theme={theme} onToggleTheme={onToggleTheme} />} />
+      <Route
+        path="/login"
+        element={
+          <LoginPage
+            isAuthenticated={isAuthenticated}
+            onLogin={onLogin}
+            theme={theme}
+            onToggleTheme={onToggleTheme}
+          />
+        }
+      />
+      <Route
+        path="/admin"
+        element={
+          isAuthenticated ? (
+            <AdminPage
+              accessToken={accessToken}
+              onLogout={onLogout}
+              theme={theme}
+              onToggleTheme={onToggleTheme}
+            />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
+      <Route path="/book" element={<Navigate to="/book/demo-barberia" replace />} />
+      <Route
+        path="/book/:businessSlug"
+        element={<PublicBookingPage theme={theme} onToggleTheme={onToggleTheme} />}
+      />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AppRoutes />
+    </BrowserRouter>
   );
 }
 
