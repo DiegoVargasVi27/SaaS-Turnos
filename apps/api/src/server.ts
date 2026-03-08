@@ -59,6 +59,18 @@ function hhmmToMinutes(value: string): number {
   return hours * 60 + minutes;
 }
 
+function asyncHandler(
+  handler: (
+    req: express.Request,
+    res: express.Response,
+    next: express.NextFunction,
+  ) => Promise<void>,
+): express.RequestHandler {
+  return (req, res, next) => {
+    void handler(req, res, next).catch(next);
+  };
+}
+
 const app = express();
 
 app.use(helmet());
@@ -70,7 +82,7 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
-app.post("/auth/register", async (req, res) => {
+app.post("/auth/register", asyncHandler(async (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
     sendError(res, 400, "INVALID_PAYLOAD", "Invalid payload", parsed.error.flatten());
@@ -136,9 +148,9 @@ app.post("/auth/register", async (req, res) => {
     business: { id: business.id, slug: business.slug, name: business.name },
     user: { id: user.id, email: user.email, fullName: user.fullName },
   });
-});
+}));
 
-app.post("/auth/login", async (req, res) => {
+app.post("/auth/login", asyncHandler(async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) {
     sendError(res, 400, "INVALID_PAYLOAD", "Invalid payload", parsed.error.flatten());
@@ -184,9 +196,9 @@ app.post("/auth/login", async (req, res) => {
   });
 
   res.json({ accessToken, refreshToken });
-});
+}));
 
-app.post("/auth/refresh", async (req, res) => {
+app.post("/auth/refresh", asyncHandler(async (req, res) => {
   const token = req.body?.refreshToken as string | undefined;
   if (!token) {
     sendError(res, 400, "MISSING_REFRESH_TOKEN", "refreshToken is required");
@@ -238,17 +250,17 @@ app.post("/auth/refresh", async (req, res) => {
   } catch {
     sendError(res, 401, "INVALID_REFRESH_TOKEN", "Invalid refresh token");
   }
-});
+}));
 
-app.get("/services", requireAuth, async (req, res) => {
+app.get("/services", requireAuth, asyncHandler(async (req, res) => {
   const services = await prisma.service.findMany({
     where: { businessId: req.auth!.businessId },
     orderBy: { createdAt: "asc" },
   });
   res.json(services);
-});
+}));
 
-app.post("/services", requireAuth, async (req, res) => {
+app.post("/services", requireAuth, asyncHandler(async (req, res) => {
   const parsed = serviceSchema.safeParse(req.body);
   if (!parsed.success) {
     sendError(res, 400, "INVALID_PAYLOAD", "Invalid payload", parsed.error.flatten());
@@ -263,17 +275,17 @@ app.post("/services", requireAuth, async (req, res) => {
   });
 
   res.status(201).json(service);
-});
+}));
 
-app.get("/availability", requireAuth, async (req, res) => {
+app.get("/availability", requireAuth, asyncHandler(async (req, res) => {
   const rules = await prisma.availabilityRule.findMany({
     where: { businessId: req.auth!.businessId },
     orderBy: [{ weekday: "asc" }, { startTime: "asc" }],
   });
   res.json(rules);
-});
+}));
 
-app.post("/availability", requireAuth, async (req, res) => {
+app.post("/availability", requireAuth, asyncHandler(async (req, res) => {
   const parsed = availabilitySchema.safeParse(req.body);
   if (!parsed.success) {
     sendError(res, 400, "INVALID_PAYLOAD", "Invalid payload", parsed.error.flatten());
@@ -293,9 +305,9 @@ app.post("/availability", requireAuth, async (req, res) => {
   });
 
   res.status(201).json(rule);
-});
+}));
 
-app.get("/appointments", requireAuth, async (req, res) => {
+app.get("/appointments", requireAuth, asyncHandler(async (req, res) => {
   const rawDate = Array.isArray(req.query.date) ? req.query.date[0] : req.query.date;
   const rawStatus = Array.isArray(req.query.status) ? req.query.status[0] : req.query.status;
 
@@ -360,9 +372,9 @@ app.get("/appointments", requireAuth, async (req, res) => {
   });
 
   res.json({ appointments });
-});
+}));
 
-app.get("/appointments/slots", async (req, res) => {
+app.get("/appointments/slots", asyncHandler(async (req, res) => {
   const businessSlug = z.string().min(3).safeParse(req.query.businessSlug);
   const serviceId = z.string().uuid().safeParse(req.query.serviceId);
   const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).safeParse(req.query.date);
@@ -440,9 +452,9 @@ app.get("/appointments/slots", async (req, res) => {
   });
 
   res.json({ slots: availableSlots.map((item) => item.toISOString()) });
-});
+}));
 
-app.post("/appointments", async (req, res) => {
+app.post("/appointments", asyncHandler(async (req, res) => {
   const parsed = createAppointmentSchema.safeParse(req.body);
   if (!parsed.success) {
     sendError(res, 400, "INVALID_PAYLOAD", "Invalid payload", parsed.error.flatten());
@@ -566,9 +578,9 @@ app.post("/appointments", async (req, res) => {
   });
 
   res.status(201).json(appointment);
-});
+}));
 
-app.patch("/appointments/:id/cancel", requireAuth, async (req, res) => {
+app.patch("/appointments/:id/cancel", requireAuth, asyncHandler(async (req, res) => {
   const id = z.string().uuid().safeParse(req.params.id);
   if (!id.success) {
     sendError(res, 400, "INVALID_APPOINTMENT_ID", "Invalid appointment id");
@@ -590,7 +602,7 @@ app.patch("/appointments/:id/cancel", requireAuth, async (req, res) => {
   });
 
   res.json(updated);
-});
+}));
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);
