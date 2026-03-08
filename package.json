@@ -1,0 +1,19 @@
+{
+  "name": "saas-turnos",
+  "private": true,
+  "version": "0.1.0",
+  "description": "SaaS de gestion de turnos",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev -w apps/web",
+    "dev:api": "npm run dev -w apps/api",
+    "build": "npm run build -w packages/shared && npm run build -w apps/api && npm run build -w apps/web",
+    "lint": "npm run lint -w apps/web"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT"
+}

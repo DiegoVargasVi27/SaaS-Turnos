@@ -1,0 +1,111 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Business {
+  id                String             @id @default(uuid())
+  name              String
+  slug              String             @unique
+  timezone          String             @default("America/Bogota")
+  createdAt         DateTime           @default(now())
+  users             BusinessUser[]
+  services          Service[]
+  availabilityRules AvailabilityRule[]
+  appointments      Appointment[]
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  passwordHash  String
+  fullName      String
+  phone         String?
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  businessLinks BusinessUser[]
+  appointments  Appointment[]
+  refreshTokens RefreshToken[]
+}
+
+model BusinessUser {
+  id         String   @id @default(uuid())
+  businessId String
+  userId     String
+  role       Role
+  createdAt  DateTime @default(now())
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, userId])
+}
+
+model Service {
+  id           String        @id @default(uuid())
+  businessId   String
+  name         String
+  durationMin  Int
+  priceCents   Int
+  currency     String        @default("USD")
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+}
+
+model AvailabilityRule {
+  id              String   @id @default(uuid())
+  businessId      String
+  weekday         Int
+  startTime       String
+  endTime         String
+  slotIntervalMin Int      @default(15)
+  isActive        Boolean  @default(true)
+  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, weekday])
+}
+
+model Appointment {
+  id           String            @id @default(uuid())
+  businessId   String
+  serviceId    String
+  clientUserId String
+  startsAt     DateTime
+  endsAt       DateTime
+  status       AppointmentStatus @default(CONFIRMED)
+  createdAt    DateTime          @default(now())
+  business     Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  service      Service           @relation(fields: [serviceId], references: [id])
+  clientUser   User              @relation(fields: [clientUserId], references: [id])
+
+  @@index([businessId, startsAt])
+}
+
+model RefreshToken {
+  id         String   @id @default(uuid())
+  userId     String
+  tokenHash  String
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  CLIENT
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}

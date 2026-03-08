@@ -1,0 +1,159 @@
+.page {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 2.5rem 1.25rem 4rem;
+}
+
+.hero {
+  margin-bottom: 1.75rem;
+  animation: fade-up 400ms ease-out;
+}
+
+.eyebrow {
+  margin: 0;
+  font-family: "Space Grotesk", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #3f5f55;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+h1 {
+  margin: 0.45rem 0;
+  font-size: clamp(1.8rem, 2.6vw, 3rem);
+  line-height: 1.1;
+}
+
+.subtitle {
+  margin: 0;
+  color: #4d5f59;
+  max-width: 66ch;
+}
+
+.guide {
+  margin: 0.65rem 0 0;
+  color: #44645a;
+}
+
+.status {
+  margin: 0.9rem 0 0;
+  display: inline-block;
+  padding: 0.45rem 0.7rem;
+  border-radius: 999px;
+  background: #dcefe9;
+  color: #20473b;
+  font-size: 0.9rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 1rem;
+}
+
+.card {
+  background: #f8f5ef;
+  border: 1px solid #dacfc0;
+  border-radius: 14px;
+  padding: 1rem;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.card h2 {
+  margin: 0 0 0.4rem;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 1.02rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.field span {
+  font-size: 0.85rem;
+  color: #3a544b;
+}
+
+input,
+select,
+button {
+  font: inherit;
+}
+
+input,
+select {
+  border: 1px solid #c9bdaf;
+  border-radius: 10px;
+  padding: 0.6rem 0.65rem;
+  background: #fff;
+}
+
+button {
+  border: none;
+  border-radius: 10px;
+  background: #184f45;
+  color: #fff;
+  padding: 0.65rem 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.booking-card {
+  margin-top: 1rem;
+}
+
+.inline-fields {
+  display: grid;
+  grid-template-columns: 2fr 1fr auto;
+  gap: 0.65rem;
+}
+
+.slot-list {
+  margin: 0;
+  padding-left: 1rem;
+  color: #35534a;
+}
+
+.appointment-list li {
+  margin-bottom: 0.35rem;
+}
+
+.inline-action {
+  margin-left: 0.5rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  background: #285d51;
+}
+
+.hint {
+  margin: 0;
+  color: #627971;
+  font-size: 0.86rem;
+}
+
+@media (max-width: 700px) {
+  .inline-fields {
+    grid-template-columns: 1fr;
+  }
+}
+
+@keyframes fade-up {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
