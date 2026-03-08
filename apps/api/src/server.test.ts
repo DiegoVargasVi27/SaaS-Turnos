@@ -1,4 +1,5 @@
 import request from "supertest";
+import jwt from "jsonwebtoken";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 type PrismaMock = {
@@ -54,6 +55,16 @@ async function loadApp(prismaMock: PrismaMock) {
   vi.doMock("./lib/prisma", () => ({ prisma: prismaMock }));
   const serverModule = await import("./server");
   return serverModule.app;
+}
+
+function authHeader(businessId = "business-1"): { Authorization: string } {
+  const token = jwt.sign(
+    { sub: "user-1", businessId, role: "OWNER" },
+    "test-access-secret",
+    { expiresIn: "15m" },
+  );
+
+  return { Authorization: `Bearer ${token}` };
 }
 
 describe("POST /appointments", () => {
@@ -440,6 +451,106 @@ describe("GET /appointments/slots", () => {
       serviceId: "11111111-1111-1111-1111-111111111111",
       date: "2030-01-07",
     });
+
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({
+      message: "Internal server error",
+      code: "INTERNAL_SERVER_ERROR",
+    });
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+});
+
+describe("GET /appointments", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns 400 when date filter is invalid", async () => {
+    const prismaMock = createPrismaMock();
+    const app = await loadApp(prismaMock);
+
+    const response = await request(app)
+      .get("/appointments")
+      .set(authHeader())
+      .query({ date: "07-01-2030" });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      message: "Invalid date. Expected YYYY-MM-DD",
+      code: "INVALID_DATE_FILTER",
+    });
+  });
+
+  it("returns 400 when status filter is invalid", async () => {
+    const prismaMock = createPrismaMock();
+    const app = await loadApp(prismaMock);
+
+    const response = await request(app)
+      .get("/appointments")
+      .set(authHeader())
+      .query({ status: "INVALID" });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      message: "Invalid status filter",
+      code: "INVALID_STATUS_FILTER",
+    });
+  });
+
+  it("returns 200 with filtered appointments", async () => {
+    const prismaMock = createPrismaMock();
+    prismaMock.appointment.findMany.mockResolvedValue([
+      {
+        id: "appointment-1",
+        businessId: "business-1",
+        status: "CONFIRMED",
+        startsAt: new Date("2030-01-07T10:00:00.000Z"),
+        endsAt: new Date("2030-01-07T10:30:00.000Z"),
+      },
+    ]);
+    const app = await loadApp(prismaMock);
+
+    const response = await request(app)
+      .get("/appointments")
+      .set(authHeader("business-1"))
+      .query({ date: "2030-01-07", status: "CONFIRMED" });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      appointments: [
+        expect.objectContaining({
+          id: "appointment-1",
+          businessId: "business-1",
+          status: "CONFIRMED",
+        }),
+      ],
+    });
+    expect(prismaMock.appointment.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          businessId: "business-1",
+          startsAt: {
+            gte: new Date("2030-01-07T00:00:00.000Z"),
+            lte: new Date("2030-01-07T23:59:59.999Z"),
+          },
+          status: "CONFIRMED",
+        },
+      }),
+    );
+  });
+
+  it("returns 500 when an unexpected error happens", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const prismaMock = createPrismaMock();
+    prismaMock.appointment.findMany.mockRejectedValue(new Error("db down"));
+    const app = await loadApp(prismaMock);
+
+    const response = await request(app)
+      .get("/appointments")
+      .set(authHeader())
+      .query({ date: "2030-01-07", status: "CONFIRMED" });
 
     expect(response.status).toBe(500);
     expect(response.body).toEqual({
