@@ -90,7 +90,10 @@ describe("POST /appointments", () => {
     });
 
     expect(response.status).toBe(409);
-    expect(response.body).toEqual({ message: "Selected slot is outside business availability" });
+    expect(response.body).toEqual({
+      message: "Selected slot is outside business availability",
+      code: "SLOT_OUTSIDE_AVAILABILITY",
+    });
   });
 
   it("returns 409 when slot overlaps an existing appointment", async () => {
@@ -130,6 +133,9 @@ describe("POST /appointments", () => {
     });
 
     expect(response.status).toBe(409);
-    expect(response.body).toEqual({ message: "Selected slot is not available" });
+    expect(response.body).toEqual({
+      message: "Selected slot is not available",
+      code: "SLOT_NOT_AVAILABLE",
+    });
   });
 });

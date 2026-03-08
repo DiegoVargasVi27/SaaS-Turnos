@@ -1,10 +1,11 @@
 import type { NextFunction, Request, Response } from "express";
 import { verifyAccessToken } from "../lib/auth";
+import { sendError } from "../lib/http";
 
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
-    res.status(401).json({ message: "Missing bearer token" });
+    sendError(res, 401, "MISSING_BEARER_TOKEN", "Missing bearer token");
     return;
   }
 
@@ -18,6 +19,6 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
     };
     next();
   } catch {
-    res.status(401).json({ message: "Invalid access token" });
+    sendError(res, 401, "INVALID_ACCESS_TOKEN", "Invalid access token");
   }
 }

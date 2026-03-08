@@ -27,9 +27,9 @@ type AppointmentItem = {
 };
 
 const colorThemes = [
-  { id: "spritz", name: "Citrus spritz" },
-  { id: "lagoon", name: "Fresh lagoon" },
-  { id: "sunset", name: "Soft sunset" },
+  { id: "spritz", name: "Stone ivory" },
+  { id: "lagoon", name: "Sage linen" },
+  { id: "sunset", name: "Rose parchment" },
 ] as const;
 
 type ColorTheme = (typeof colorThemes)[number]["id"];
