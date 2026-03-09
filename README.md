@@ -1,90 +1,51 @@
-# SaaS Turnos MVP
+# SaaS Turnos
 
-MVP full stack para gestionar reservas de turnos. Incluye API con autenticacion, servicios, reglas de disponibilidad y reserva publica de slots.
+Sistema de reservas para negocios de servicios: barberías, estéticas, consultorios, talleres. Donde gestionar turnos sea simple y sin conflictos de horarios.
+
+## Qué resuelve
+
+Un negocio puede publicar sus servicios con horarios disponibles y los clientes pueden reservar sin que se pisen los turnos. El propietario tiene un panel para gestionar su agenda diaria, crear servicios, configurar disponibilidad y cancelar turnos cuando sea necesario.
+
+Lo interesante del proyecto es que implementa lógica de negocio real: validación de solapes, verificación de horarios dentro de la disponibilidad del negocio, y respuestas claras cuando algo no se puede completar.
+
+## Cómo se hizo
+
+Este proyecto fue desarrollado utilizando **OpenCode** como agente autonomous de código, combinado con **GPT-5 Codex** para decisiones de arquitectura y lógica de negocio. El workflow incluyó agents especializados para diseño frontend, búsqueda de código y manejo de tareas complejas, siguiendo un proceso de ramas y commits con convenciones definidas.
+
+Básicamente, se daban las indicaciones de qué necesitaba y los agents se encargaban de investigar el código existente, proponer soluciones, implementarlas y validar que todo funcionara. Fue como tener un pair programmer que conoce el codebase y busca patrones similares.
+
+El proyecto utiliza un monorepo con npm workspaces para separar API, web y código compartido.
 
 ## Stack
 
-- `apps/api`: Node.js + Express + Prisma + PostgreSQL
-- `apps/web`: React + TypeScript + Vite
-- `packages/shared`: validaciones y tipos reutilizables (base)
+- **Backend**: Node.js, Express, Prisma, PostgreSQL
+- **Frontend**: React, TypeScript, Vite
+- **Testing**: Vitest
+- **Base de datos**: PostgreSQL (Docker)
 
-## Requisitos
+## Demo
 
-- Node.js 20+
-- Docker (para PostgreSQL)
+Acá va un screenshot o GIF del flujo en acción.
 
-## Arranque rapido
+<!-- TODO: agregar screenshot del flujo -->
 
-1. Instala dependencias:
+## Qué demuestra este proyecto
 
-```bash
-npm install
-```
+- Lógica de negocio real: reglas de disponibilidad, generación de slots, prevención de solapes
+- API REST con manejo de errores consistente y códigos claros
+- Flujo de autenticación con JWT y refresh tokens
+- Interfaz con experiencia de usuario operativa y flujo guiado
+- Tests automatizados sobre casos críticos de la API
+- Monorepo bien organizado con workspaces
+- Buenas prácticas: tipos estrictos, validaciones con Zod, código limpio
 
-2. Levanta la base de datos:
+## Próximos pasos
 
-```bash
-docker compose up -d
-```
+- Deploy a producción (Render, Vercel, etc.)
+- Incrementar cobertura de tests
+- Mejorar experiencia en dispositivos móviles
+- Agregar funciones como historial de clientes
 
-3. Configura variables de entorno en API:
+---
 
-```bash
-copy apps\api\.env.example apps\api\.env
-```
-
-4. Genera cliente Prisma y ejecuta migracion:
-
-```bash
-npm run prisma:generate -w apps/api
-npm run prisma:migrate -w apps/api -- --name init
-```
-
-5. Carga datos demo:
-
-```bash
-npm run prisma:seed -w apps/api
-```
-
-6. Ejecuta API y frontend (en dos terminales):
-
-```bash
-npm run dev:api
-npm run dev:web
-```
-
-Frontend: `http://localhost:5173`
-
-API: `http://localhost:4000`
-
-## Credenciales demo
-
-- Email: `owner@demo.com`
-- Password: `admin12345`
-- Business slug: `demo-barberia`
-
-## Endpoints clave
-
-- `POST /auth/register`
-- `POST /auth/login`
-- `POST /auth/refresh`
-- `GET /services` (auth)
-- `POST /services` (auth)
-- `GET /availability` (auth)
-- `POST /availability` (auth)
-- `GET /appointments` (auth, filtros `date` y `status`)
-- `GET /appointments/slots`
-- `POST /appointments`
-- `PATCH /appointments/:id/cancel` (auth)
-
-## Siguiente scope recomendado
-
-- Agregar validacion de timezone por negocio
-- Agregar tests de slots y doble reserva
-- Agregar panel de agenda diaria con cancelacion/reagenda
-
-## Plan y seguimiento
-
-- Plan de trabajo vivo: `docs/ROADMAP.md`
-- Registro por sesion: `docs/WORKLOG.md`
-- Flujo de ramas y commits: `docs/GIT_WORKFLOW.md`
+Para más detalles sobre el proceso de desarrollo, hay un worklog y roadmap internos en la carpeta `docs/`.
