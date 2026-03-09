@@ -1,90 +1,91 @@
-# SaaS Turnos MVP
+# SaaS Turnos
 
-MVP full stack para gestionar reservas de turnos. Incluye API con autenticacion, servicios, reglas de disponibilidad y reserva publica de slots.
+Aplicacion full stack de reservas para negocios de servicios (barberias, esteticas, consultorios, etc.).
+
+Este proyecto nace como portfolio para demostrar criterio de producto y backend real: autenticacion, reglas de disponibilidad, slots publicos y control de agenda sin dobles reservas.
+
+## Que demuestra este proyecto
+
+- Flujo de reserva completo: servicio -> fecha -> horario -> confirmacion.
+- Reglas de negocio para evitar solapes y turnos fuera de disponibilidad.
+- API con manejo de errores consistente (`code` + `message`).
+- Panel operativo para gestionar disponibilidad y agenda diaria.
+- Base de tests en API sobre casos criticos de turnos.
 
 ## Stack
 
-- `apps/api`: Node.js + Express + Prisma + PostgreSQL
-- `apps/web`: React + TypeScript + Vite
-- `packages/shared`: validaciones y tipos reutilizables (base)
+- Backend: Node.js, Express, TypeScript, Prisma, PostgreSQL
+- Frontend: React, TypeScript, Vite
+- Monorepo: npm workspaces
 
-## Requisitos
+## Arquitectura (resumen)
+
+- `apps/api`: API REST y logica de negocio
+- `apps/web`: interfaz de operacion y validacion del flujo
+- `packages/shared`: contratos compartidos y tipos
+
+## Correr en local
+
+Requisitos:
 
 - Node.js 20+
-- Docker (para PostgreSQL)
+- Docker
 
-## Arranque rapido
-
-1. Instala dependencias:
+Pasos:
 
 ```bash
 npm install
-```
-
-2. Levanta la base de datos:
-
-```bash
 docker compose up -d
-```
-
-3. Configura variables de entorno en API:
-
-```bash
 copy apps\api\.env.example apps\api\.env
-```
-
-4. Genera cliente Prisma y ejecuta migracion:
-
-```bash
 npm run prisma:generate -w apps/api
 npm run prisma:migrate -w apps/api -- --name init
-```
-
-5. Carga datos demo:
-
-```bash
 npm run prisma:seed -w apps/api
 ```
 
-6. Ejecuta API y frontend (en dos terminales):
+Luego, en dos terminales:
 
 ```bash
 npm run dev:api
 npm run dev:web
 ```
 
-Frontend: `http://localhost:5173`
+- Web: `http://localhost:5173`
+- API: `http://localhost:4000`
 
-API: `http://localhost:4000`
-
-## Credenciales demo
+## Credenciales demo (solo entorno local)
 
 - Email: `owner@demo.com`
 - Password: `admin12345`
 - Business slug: `demo-barberia`
 
-## Endpoints clave
+Estas credenciales existen para pruebas locales del seed y no deben usarse en produccion.
+
+## Endpoints principales
 
 - `POST /auth/register`
 - `POST /auth/login`
 - `POST /auth/refresh`
-- `GET /services` (auth)
-- `POST /services` (auth)
-- `GET /availability` (auth)
-- `POST /availability` (auth)
-- `GET /appointments` (auth, filtros `date` y `status`)
-- `GET /appointments/slots`
-- `POST /appointments`
+- `GET /services` / `POST /services` (auth)
+- `GET /availability` / `POST /availability` (auth)
+- `GET /appointments` (auth, filtros por fecha/estado)
+- `GET /appointments/slots` (publico)
+- `POST /appointments` (publico)
 - `PATCH /appointments/:id/cancel` (auth)
 
-## Siguiente scope recomendado
+## Estado actual
 
-- Agregar validacion de timezone por negocio
-- Agregar tests de slots y doble reserva
-- Agregar panel de agenda diaria con cancelacion/reagenda
+- MVP funcional de punta a punta.
+- Build y lint en verde.
+- Tests de API orientados a reglas de turnos y manejo de errores.
 
-## Plan y seguimiento
+## Proximos pasos de portfolio
 
-- Plan de trabajo vivo: `docs/ROADMAP.md`
-- Registro por sesion: `docs/WORKLOG.md`
-- Flujo de ramas y commits: `docs/GIT_WORKFLOW.md`
+- Deploy de API + web en cloud.
+- Capturas o demo en video corto del flujo principal.
+- Mas cobertura automatica en casos de negocio complejos.
+
+## Documentacion interna
+
+- Roadmap: `docs/ROADMAP.md`
+- Worklog: `docs/WORKLOG.md`
+- Flujo Git: `docs/GIT_WORKFLOW.md`

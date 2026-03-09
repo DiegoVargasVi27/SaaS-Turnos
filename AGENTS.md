@@ -118,6 +118,21 @@ Shared (`packages/shared`):
 - Mostrar errores de backend en el estado de UI de forma consistente.
 - Preferir inputs controlados cuando afectan pasos posteriores.
 
+### Logica de negocio frontend (MVP actual)
+- Separar UI por pantallas: `login`, `admin` y `book` (publica).
+- Personas del sistema:
+  - `cliente final`: solo agenda turnos.
+  - `prestador` (`OWNER`/`ADMIN`): gestiona servicios, disponibilidad y agenda.
+- Booking publico (sin auth) por URL con slug: `\/book\/:businessSlug`.
+- En booking publico el cliente final no crea cuenta ni inicia sesion; solo completa datos de contacto para confirmar reserva.
+- Flujo de reserva en 4 clics maximo: elegir servicio -> elegir fecha -> elegir horario -> confirmar.
+- En booking publico mostrar solo servicios activos (`isActive = true`).
+- Pantalla `login` es exclusiva para prestador (no para cliente final).
+- En `admin`, acceso solo para `OWNER` y `ADMIN`.
+- Admin puede crear, editar y desactivar servicios; "borrar" se implementa como baja logica (`isActive = false`).
+- Mantener vistas distintas para admin y cliente final; no mezclar ambos flujos en una sola pantalla.
+- Preservar contrato de error API en UI (`code` + `message`) para feedback consistente.
+
 ### Patrones del paquete shared
 - Mantener contratos reutilizables en `packages/shared/src/index.ts`.
 - Exportar schema + tipo inferido cuando convenga.

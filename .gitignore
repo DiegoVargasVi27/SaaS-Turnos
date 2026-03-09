@@ -2,6 +2,14 @@ node_modules/
 dist/
 *.log
 .DS_Store
+*.local
 
 apps/api/.env
 apps/web/.env
+apps/api/.env.*
+!apps/api/.env.example
+apps/web/.env.*
+!apps/web/.env.example
+
+.agents/
+skills-lock.json
