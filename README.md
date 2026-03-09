@@ -10,9 +10,9 @@ Lo interesante del proyecto es que implementa lógica de negocio real: validaci�
 
 ## Cómo se hizo
 
-Este proyecto fue desarrollado utilizando **OpenCode** como agente autonomous de código, combinado con **GPT-5 Codex** para decisiones de arquitectura y lógica de negocio. El workflow incluyó agents especializados para diseño frontend, búsqueda de código y manejo de tareas complejas, siguiendo un proceso de ramas y commits con convenciones definidas.
+Este proyecto fue desarrollado utilizando **OpenCode** como agente autonomo de código, combinado con **GPT-5 Codex** para decisiones de arquitectura y lógica de negocio. El workflow incluyó agents especializados para diseño frontend, búsqueda de código y manejo de tareas complejas, siguiendo un proceso de ramas y commits con convenciones definidas.
 
-Básicamente, se daban las indicaciones de qué necesitaba y los agents se encargaban de investigar el código existente, proponer soluciones, implementarlas y validar que todo funcionara. Fue como tener un pair programmer que conoce el codebase y busca patrones similares.
+Básicamente, se daban las indicaciones de qué necesitaba y los agentes se encargaban de investigar el código existente, proponer soluciones, implementarlas y validar que todo funcionara. Fue como tener un *pair programmer* que conoce el codebase y busca patrones similares.
 
 El proyecto utiliza un monorepo con npm workspaces para separar API, web y código compartido.
 
