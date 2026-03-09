@@ -23,12 +23,6 @@ El proyecto utiliza un monorepo con npm workspaces para separar API, web y códi
 - **Testing**: Vitest
 - **Base de datos**: PostgreSQL (Docker)
 
-## Demo
-
-Acá va un screenshot o GIF del flujo en acción.
-
-<!-- TODO: agregar screenshot del flujo -->
-
 ## Qué demuestra este proyecto
 
 - Lógica de negocio real: reglas de disponibilidad, generación de slots, prevención de solapes
@@ -48,4 +42,3 @@ Acá va un screenshot o GIF del flujo en acción.
 
 ---
 
-Para más detalles sobre el proceso de desarrollo, hay un worklog y roadmap internos en la carpeta `docs/`.
