@@ -102,46 +102,64 @@ app.post("/auth/register", asyncHandler(async (req, res) => {
   }
 
   const input = parsed.data;
-  const existing = await prisma.business.findUnique({ where: { slug: input.businessSlug } });
-  if (existing) {
-    sendError(res, 409, "BUSINESS_SLUG_ALREADY_EXISTS", "Business slug already exists");
-    return;
-  }
-
-  const existingUser = await prisma.user.findUnique({ where: { email: input.email } });
-  if (existingUser) {
-    sendError(res, 409, "EMAIL_ALREADY_EXISTS", "Email already exists");
-    return;
-  }
-
   const passwordHash = await hashPassword(input.password);
 
-  const { user, business } = await prisma.$transaction(async (tx) => {
-    const businessData = await tx.business.create({
-      data: {
-        name: input.businessName,
-        slug: input.businessSlug,
-      },
-    });
+  let user, business;
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const existingSlug = await tx.business.findUnique({ where: { slug: input.businessSlug } });
+      if (existingSlug) {
+        throw Object.assign(new Error("Business slug already exists"), {
+          appCode: "BUSINESS_SLUG_ALREADY_EXISTS" as const,
+        });
+      }
 
-    const userData = await tx.user.create({
-      data: {
-        email: input.email,
-        fullName: input.fullName,
-        passwordHash,
-      },
-    });
+      const existingEmail = await tx.user.findUnique({ where: { email: input.email } });
+      if (existingEmail) {
+        throw Object.assign(new Error("Email already exists"), {
+          appCode: "EMAIL_ALREADY_EXISTS" as const,
+        });
+      }
 
-    await tx.businessUser.create({
-      data: {
-        businessId: businessData.id,
-        userId: userData.id,
-        role: Role.OWNER,
-      },
-    });
+      const businessData = await tx.business.create({
+        data: {
+          name: input.businessName,
+          slug: input.businessSlug,
+        },
+      });
 
-    return { user: userData, business: businessData };
-  });
+      const userData = await tx.user.create({
+        data: {
+          email: input.email,
+          fullName: input.fullName,
+          passwordHash,
+        },
+      });
+
+      await tx.businessUser.create({
+        data: {
+          businessId: businessData.id,
+          userId: userData.id,
+          role: Role.OWNER,
+        },
+      });
+
+      return { user: userData, business: businessData };
+    });
+    user = result.user;
+    business = result.business;
+  } catch (err: unknown) {
+    const appErr = err as { appCode?: string; message?: string };
+    if (appErr.appCode === "BUSINESS_SLUG_ALREADY_EXISTS") {
+      sendError(res, 409, "BUSINESS_SLUG_ALREADY_EXISTS", "Business slug already exists");
+      return;
+    }
+    if (appErr.appCode === "EMAIL_ALREADY_EXISTS") {
+      sendError(res, 409, "EMAIL_ALREADY_EXISTS", "Email already exists");
+      return;
+    }
+    throw err;
+  }
 
   const accessToken = signAccessToken({ sub: user.id, businessId: business.id, role: "OWNER" });
   const refreshToken = signRefreshToken(user.id);
@@ -641,61 +659,75 @@ app.post("/appointments", asyncHandler(async (req, res) => {
     return;
   }
 
-  const overlapping = await prisma.appointment.findFirst({
-    where: {
-      businessId: business.id,
-      status: { in: ["PENDING", "CONFIRMED"] },
-      startsAt: { lt: endsAt },
-      endsAt: { gt: startsAt },
-    },
-  });
-
-  if (overlapping) {
-    sendError(res, 409, "SLOT_NOT_AVAILABLE", "Selected slot is not available");
-    return;
-  }
-
   const fallbackPassword = await hashPassword(`client-${Date.now()}-${Math.random()}`);
-  const client = await prisma.user.upsert({
-    where: { email: input.clientEmail },
-    update: {
-      fullName: input.clientName,
-      phone: input.clientPhone,
-    },
-    create: {
-      email: input.clientEmail,
-      fullName: input.clientName,
-      phone: input.clientPhone,
-      passwordHash: fallbackPassword,
-    },
-  });
 
-  await prisma.businessUser.upsert({
-    where: {
-      businessId_userId: {
-        businessId: business.id,
-        userId: client.id,
-      },
-    },
-    update: {},
-    create: {
-      businessId: business.id,
-      userId: client.id,
-      role: Role.CLIENT,
-    },
-  });
+  let appointment;
+  try {
+    appointment = await prisma.$transaction(async (tx) => {
+      const overlapping = await tx.appointment.findFirst({
+        where: {
+          businessId: business.id,
+          status: { in: ["PENDING", "CONFIRMED"] },
+          startsAt: { lt: endsAt },
+          endsAt: { gt: startsAt },
+        },
+      });
 
-  const appointment = await prisma.appointment.create({
-    data: {
-      businessId: business.id,
-      serviceId: service.id,
-      clientUserId: client.id,
-      startsAt,
-      endsAt,
-      status: "CONFIRMED",
-    },
-    include: { service: true },
-  });
+      if (overlapping) {
+        throw Object.assign(new Error("Selected slot is not available"), {
+          appCode: "SLOT_NOT_AVAILABLE" as const,
+        });
+      }
+
+      const client = await tx.user.upsert({
+        where: { email: input.clientEmail },
+        update: {
+          fullName: input.clientName,
+          phone: input.clientPhone,
+        },
+        create: {
+          email: input.clientEmail,
+          fullName: input.clientName,
+          phone: input.clientPhone,
+          passwordHash: fallbackPassword,
+        },
+      });
+
+      await tx.businessUser.upsert({
+        where: {
+          businessId_userId: {
+            businessId: business.id,
+            userId: client.id,
+          },
+        },
+        update: {},
+        create: {
+          businessId: business.id,
+          userId: client.id,
+          role: Role.CLIENT,
+        },
+      });
+
+      return tx.appointment.create({
+        data: {
+          businessId: business.id,
+          serviceId: service.id,
+          clientUserId: client.id,
+          startsAt,
+          endsAt,
+          status: "CONFIRMED",
+        },
+        include: { service: true },
+      });
+    });
+  } catch (err: unknown) {
+    const appErr = err as { appCode?: string };
+    if (appErr.appCode === "SLOT_NOT_AVAILABLE") {
+      sendError(res, 409, "SLOT_NOT_AVAILABLE", "Selected slot is not available");
+      return;
+    }
+    throw err;
+  }
 
   res.status(201).json(appointment);
 }));

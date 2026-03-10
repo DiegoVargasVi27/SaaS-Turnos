@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import {
-  BrowserRouter,
   Link,
   NavLink,
   Navigate,
@@ -1002,11 +1001,7 @@ function AppRoutes() {
 }
 
 function App() {
-  return (
-    <BrowserRouter>
-      <AppRoutes />
-    </BrowserRouter>
-  );
+  return <AppRoutes />;
 }
 
 export default App;
