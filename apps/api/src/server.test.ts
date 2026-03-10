@@ -29,7 +29,7 @@ function setRequiredEnv(): void {
 }
 
 function createPrismaMock(): PrismaMock {
-  return {
+  const mock: PrismaMock = {
     business: { findUnique: vi.fn() },
     service: { findFirst: vi.fn() },
     availabilityRule: { findMany: vi.fn() },
@@ -47,6 +47,12 @@ function createPrismaMock(): PrismaMock {
     },
     $transaction: vi.fn(),
   };
+  // By default, $transaction executes the callback with the mock itself as tx
+  mock.$transaction.mockImplementation((fn: unknown) => {
+    if (typeof fn === "function") return fn(mock);
+    return Promise.resolve(fn);
+  });
+  return mock;
 }
 
 async function loadApp(prismaMock: PrismaMock) {
