@@ -17,6 +17,7 @@ import {
 import { requireAuth, requireRole } from "./middleware/auth";
 import { sendError } from "./lib/http";
 import { buildSlots, overlaps } from "./lib/slots";
+import { createServiceRouter } from "./controllers/catalog/ServiceController";
 
 const registerSchema = z.object({
   businessName: z.string().min(2),
@@ -89,6 +90,15 @@ app.use(helmet());
 app.use(cors({ origin: true, credentials: false }));
 app.use(morgan("dev"));
 app.use(express.json());
+
+// ============================================================================
+// DDD Architecture Routes (NEW)
+// ============================================================================
+app.use("/api/services", createServiceRouter());
+
+// ============================================================================
+// Legacy Routes (OLD - to be migrated)
+// ============================================================================
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
