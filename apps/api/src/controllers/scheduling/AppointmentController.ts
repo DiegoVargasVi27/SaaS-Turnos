@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { z } from "zod";
+import { createAppointmentSchema as sharedAppointmentSchema } from "@saas-turnos/shared";
 import { requireAuth, requireRole } from "../../middleware/auth";
 import { CreateAppointmentService } from "../../application/scheduling/CreateAppointmentService";
 import { CancelAppointmentService } from "../../application/scheduling/CancelAppointmentService";
@@ -11,12 +12,9 @@ import { DomainExceptionMapper } from "../errorHandling/DomainExceptionMapper";
 import { CreateAppointmentDTO } from "../../dtos/scheduling/CreateAppointmentDTO";
 import { AppointmentStatus as PrismaStatus } from "@prisma/client";
 
-// Validation schemas
-const createAppointmentSchema = z.object({
-  businessSlug: z.string().min(3),
-  serviceId: z.string().uuid(),
+// Use shared schema with additional validations
+const createAppointmentSchema = sharedAppointmentSchema.extend({
   startsAt: z.string().datetime(),
-  clientEmail: z.string().email(),
   clientName: z.string().min(2).max(100),
   clientPhone: z.string().min(5).max(20),
 });
