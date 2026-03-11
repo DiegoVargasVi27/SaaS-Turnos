@@ -17,6 +17,9 @@ import {
 import { requireAuth, requireRole } from "./middleware/auth";
 import { sendError } from "./lib/http";
 import { buildSlots, overlaps } from "./lib/slots";
+import { createServiceRouter } from "./controllers/catalog/ServiceController";
+import { createSlotsRouter } from "./controllers/scheduling/SlotsController";
+import { createAppointmentRouter } from "./controllers/scheduling/AppointmentController";
 
 const registerSchema = z.object({
   businessName: z.string().min(2),
@@ -89,6 +92,20 @@ app.use(helmet());
 app.use(cors({ origin: true, credentials: false }));
 app.use(morgan("dev"));
 app.use(express.json());
+
+// ============================================================================
+// DDD Architecture Routes (NEW)
+// ============================================================================
+// Catalog bounded context
+app.use("/api/services", createServiceRouter());
+
+// Scheduling bounded context
+app.use("/api/appointments/slots", createSlotsRouter());
+app.use("/api/appointments", createAppointmentRouter());
+
+// ============================================================================
+// Legacy Routes (OLD - to be migrated)
+// ============================================================================
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
