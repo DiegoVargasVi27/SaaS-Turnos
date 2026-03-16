@@ -4,3 +4,7 @@ export { createPublicRouter } from "./public/PublicController";
 export { createServiceRouter } from "./catalog/ServiceController";
 export { createAppointmentRouter } from "./scheduling/AppointmentController";
 export { createSlotsRouter } from "./scheduling/SlotsController";
+export { createIdentityRouter } from "./identity";
+export { createCatalogPublicRouter } from "./catalog-ddd/CatalogPublicController";
+export { createSchedulingSlotsRouter } from "./scheduling-ddd/SlotsController";
+export { createSchedulingAppointmentRouter } from "./scheduling-ddd/AppointmentController";

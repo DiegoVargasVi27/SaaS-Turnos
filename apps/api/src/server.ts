@@ -11,6 +11,8 @@ import {
   createAvailabilityRouter,
   createPublicRouter,
 } from "./controllers";
+import { buildCatalogSchedulingModule, buildIdentityModule } from "./composition";
+import { prisma } from "./lib/prisma";
 import { sendError } from "./lib/http";
 
 const app = express();
@@ -27,18 +29,29 @@ app.use(express.json());
 // Catalog bounded context
 app.use("/api/services", createServiceRouter());
 
-// Scheduling bounded context
-app.use("/api/appointments/slots", createSlotsRouter());
-app.use("/api/appointments", createAppointmentRouter());
+if (config.enableCatalogDDD) {
+  const catalogScheduling = buildCatalogSchedulingModule({ prisma });
+  app.use("/public", catalogScheduling.publicRouter);
+  app.use("/api/appointments/slots", catalogScheduling.slotsRouter);
+  app.use("/api/appointments", catalogScheduling.appointmentRouter);
+} else {
+  // Legacy public + scheduling routers
+  app.use("/public", createPublicRouter());
+  app.use("/api/appointments/slots", createSlotsRouter());
+  app.use("/api/appointments", createAppointmentRouter());
+}
 
-// Auth bounded context
-app.use("/auth", createAuthRouter());
+if (config.enableIdentityDDD) {
+  const identityModule = buildIdentityModule({ prisma, refreshTokenTtlDays: config.refreshTokenTtlDays });
+  app.use("/api/identity", identityModule.router);
+  app.use("/auth", identityModule.router);
+} else {
+  app.use("/auth", createAuthRouter());
+}
 
 // Availability bounded context
 app.use("/api/availability", createAvailabilityRouter());
 
-// Public endpoints
-app.use("/public", createPublicRouter());
 
 // Health Check
 app.get("/health", (_req, res) => {
