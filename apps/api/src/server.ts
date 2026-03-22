@@ -57,7 +57,6 @@ if (config.enableIdentityDDD) {
 // Availability bounded context
 app.use("/api/availability", createAvailabilityRouter());
 
-
 // Health Check
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });

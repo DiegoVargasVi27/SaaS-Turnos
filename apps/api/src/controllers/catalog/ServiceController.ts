@@ -1,6 +1,5 @@
 import { Router, Request, Response } from "express";
 import { z } from "zod";
-import { serviceSchema } from "@saas-turnos/shared";
 import { requireAuth, requireRole } from "../../middleware/auth";
 import { CreateServiceService } from "../../application/catalog/CreateServiceService";
 import { UpdateServiceService } from "../../application/catalog/UpdateServiceService";
@@ -11,10 +10,12 @@ import { DomainExceptionMapper } from "../errorHandling/DomainExceptionMapper";
 import { CreateServiceDTO } from "../../dtos/catalog/CreateServiceDTO";
 import { UpdateServiceDTO } from "../../dtos/catalog/UpdateServiceDTO";
 
-// Use shared schema with additional validations
-const createServiceSchema = serviceSchema.extend({
+// Validation schemas using Zod
+const createServiceSchema = z.object({
   name: z.string().min(2).max(100),
   durationMin: z.number().int().positive().max(480).multipleOf(5),
+  priceCents: z.number().int().nonnegative(),
+  currency: z.string().length(3).optional().default("USD"),
 });
 
 const updateServiceSchema = z
