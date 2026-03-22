@@ -46,7 +46,7 @@ export class Appointment implements Entity {
     }
 
     const appointmentId = id ?? AppointmentId.create();
-    const status = AppointmentStatus.confirmed(); // Default to CONFIRMED
+    const status = AppointmentStatus.pending(); // Default to PENDING
     const createdAt = new Date();
 
     return new Appointment(

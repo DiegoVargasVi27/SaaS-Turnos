@@ -2,10 +2,18 @@ import { Service } from "../entities/service/Service";
 import { ServiceId } from "../../shared/types/ServiceId";
 import { BusinessId } from "../../shared/types/BusinessId";
 
+export interface CatalogBusinessSummary {
+  id: BusinessId;
+  slug: string;
+  name: string;
+  timezone: string;
+}
+
 /**
- * Service repository interface.
- * Defines persistence operations for the Service aggregate.
- * 
+ * Unified Service repository interface.
+ * Defines ALL persistence operations for the Service aggregate —
+ * both admin CRUD and public read-only queries.
+ *
  * This interface lives in the domain layer (Dependency Inversion Principle).
  * The infrastructure layer will provide the concrete implementation.
  */
@@ -54,10 +62,22 @@ export interface IServiceRepository {
   /**
    * Business rule: Check if service has future appointments.
    * Used to prevent deletion of services with pending bookings.
-   * 
+   *
    * @param id - Service identifier
    * @returns true if service has any PENDING or CONFIRMED appointments
    *          scheduled in the future, false otherwise
    */
   hasFutureAppointments(id: ServiceId): Promise<boolean>;
+
+  // --- Public query methods (previously in CatalogServiceRepository) ---
+
+  /**
+   * Resolve a business by its public slug.
+   */
+  findBusinessBySlug(slug: string): Promise<CatalogBusinessSummary | null>;
+
+  /**
+   * Find an active service by id regardless of business context.
+   */
+  findActiveById(serviceId: ServiceId): Promise<Service | null>;
 }

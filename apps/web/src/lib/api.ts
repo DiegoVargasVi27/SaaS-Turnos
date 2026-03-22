@@ -1,6 +1,6 @@
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
 
-type ApiErrorPayload = {
+export type ApiErrorPayload = {
   code?: string;
   message?: string;
   details?: unknown;
@@ -17,6 +17,15 @@ export class ApiClientError extends Error {
     this.status = status;
     this.code = payload.code;
     this.details = payload.details;
+  }
+}
+
+export class ApiRequestError extends Error {
+  code: string;
+
+  constructor(code: string, message: string) {
+    super(message);
+    this.code = code;
   }
 }
 

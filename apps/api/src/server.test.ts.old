@@ -82,7 +82,7 @@ describe("POST /appointments", () => {
     const prismaMock = createPrismaMock();
     const app = await loadApp(prismaMock);
 
-    const response = await request(app).post("/appointments").send({
+    const response = await request(app).post("/api/appointments").send({
       businessSlug: "demo-barberia",
       serviceId: "invalid-uuid",
       startsAt: "2030-01-07T10:00:00.000Z",
@@ -93,8 +93,8 @@ describe("POST /appointments", () => {
     expect(response.status).toBe(400);
     expect(response.body).toEqual(
       expect.objectContaining({
-        code: "INVALID_PAYLOAD",
-        message: "Invalid payload",
+        error: "VALIDATION_ERROR",
+        message: "Invalid input",
       }),
     );
   });
@@ -105,7 +105,7 @@ describe("POST /appointments", () => {
 
     const app = await loadApp(prismaMock);
 
-    const response = await request(app).post("/appointments").send({
+    const response = await request(app).post("/api/appointments").send({
       businessSlug: "demo-barberia",
       serviceId: "11111111-1111-1111-1111-111111111111",
       startsAt: "2030-01-07T10:00:00.000Z",
@@ -128,7 +128,7 @@ describe("POST /appointments", () => {
 
     const app = await loadApp(prismaMock);
 
-    const response = await request(app).post("/appointments").send({
+    const response = await request(app).post("/api/appointments").send({
       businessSlug: "demo-barberia",
       serviceId: "11111111-1111-1111-1111-111111111111",
       startsAt: "2030-01-07T10:00:00.000Z",
@@ -156,7 +156,7 @@ describe("POST /appointments", () => {
 
     const app = await loadApp(prismaMock);
 
-    const response = await request(app).post("/appointments").send({
+    const response = await request(app).post("/api/appointments").send({
       businessSlug: "demo-barberia",
       serviceId: "11111111-1111-1111-1111-111111111111",
       startsAt: "2000-01-07T10:00:00.000Z",
@@ -184,7 +184,7 @@ describe("POST /appointments", () => {
 
     const app = await loadApp(prismaMock);
 
-    const response = await request(app).post("/appointments").send({
+    const response = await request(app).post("/api/appointments").send({
       businessSlug: "demo-barberia",
       serviceId: "11111111-1111-1111-1111-111111111111",
       startsAt: "2030-01-07T23:30:00.000Z",
@@ -221,7 +221,7 @@ describe("POST /appointments", () => {
 
     const app = await loadApp(prismaMock);
 
-    const response = await request(app).post("/appointments").send({
+    const response = await request(app).post("/api/appointments").send({
       businessSlug: "demo-barberia",
       serviceId: "11111111-1111-1111-1111-111111111111",
       startsAt: "2030-01-07T08:00:00.000Z",
@@ -264,7 +264,7 @@ describe("POST /appointments", () => {
 
     const app = await loadApp(prismaMock);
 
-    const response = await request(app).post("/appointments").send({
+    const response = await request(app).post("/api/appointments").send({
       businessSlug: "demo-barberia",
       serviceId: "11111111-1111-1111-1111-111111111111",
       startsAt: "2030-01-07T10:00:00.000Z",
@@ -311,7 +311,7 @@ describe("POST /appointments", () => {
 
     const app = await loadApp(prismaMock);
 
-    const response = await request(app).post("/appointments").send({
+    const response = await request(app).post("/api/appointments").send({
       businessSlug: "demo-barberia",
       serviceId: "11111111-1111-1111-1111-111111111111",
       startsAt: "2030-01-07T10:00:00.000Z",
@@ -361,7 +361,7 @@ describe("POST /appointments", () => {
 
     const app = await loadApp(prismaMock);
 
-    const response = await request(app).post("/appointments").send({
+    const response = await request(app).post("/api/appointments").send({
       businessSlug: "demo-barberia",
       serviceId: "11111111-1111-1111-1111-111111111111",
       startsAt: "2030-01-07T10:00:00.000Z",
@@ -389,7 +389,7 @@ describe("GET /appointments/slots", () => {
     const prismaMock = createPrismaMock();
     const app = await loadApp(prismaMock);
 
-    const response = await request(app).get("/appointments/slots").query({
+    const response = await request(app).get("/api/appointments/slots").query({
       businessSlug: "de",
       serviceId: "invalid-uuid",
       date: "07-01-2030",
@@ -407,7 +407,7 @@ describe("GET /appointments/slots", () => {
     prismaMock.business.findUnique.mockResolvedValue(null);
     const app = await loadApp(prismaMock);
 
-    const response = await request(app).get("/appointments/slots").query({
+    const response = await request(app).get("/api/appointments/slots").query({
       businessSlug: "demo-barberia",
       serviceId: "11111111-1111-1111-1111-111111111111",
       date: "2030-01-07",
@@ -426,7 +426,7 @@ describe("GET /appointments/slots", () => {
     prismaMock.service.findFirst.mockResolvedValue(null);
     const app = await loadApp(prismaMock);
 
-    const response = await request(app).get("/appointments/slots").query({
+    const response = await request(app).get("/api/appointments/slots").query({
       businessSlug: "demo-barberia",
       serviceId: "11111111-1111-1111-1111-111111111111",
       date: "2030-01-07",
@@ -452,7 +452,7 @@ describe("GET /appointments/slots", () => {
     prismaMock.availabilityRule.findMany.mockRejectedValue(new Error("db down"));
     const app = await loadApp(prismaMock);
 
-    const response = await request(app).get("/appointments/slots").query({
+    const response = await request(app).get("/api/appointments/slots").query({
       businessSlug: "demo-barberia",
       serviceId: "11111111-1111-1111-1111-111111111111",
       date: "2030-01-07",

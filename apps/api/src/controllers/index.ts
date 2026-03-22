@@ -1,0 +1,13 @@
+export { createAuthRouter } from "./auth/AuthController";
+export { createAvailabilityRouter } from "./availability/AvailabilityController";
+export { createPublicRouter } from "./public/PublicController";
+export { createServiceRouter } from "./catalog/ServiceController";
+export { createAppointmentRouter } from "./scheduling/AppointmentController";
+export { createSlotsRouter } from "./scheduling/SlotsController";
+export { createIdentityRouter } from "./identity";
+export { createCatalogPublicRouter } from "./catalog-ddd/CatalogPublicController";
+export { createCatalogServiceRouter } from "./catalog-ddd/CatalogServiceController";
+export { createSchedulingSlotsRouter } from "./scheduling-ddd/SlotsController";
+export { createSchedulingAppointmentRouter } from "./scheduling-ddd/AppointmentController";
+export { createSchedulingAvailabilityRouter } from "./scheduling-ddd/AvailabilityRuleController";
+export { createSchedulingAppointmentManagementRouter } from "./scheduling-ddd/AppointmentManagementController";
