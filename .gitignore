@@ -48,3 +48,6 @@ openspec/changes/comprehensive-project-refactor/specs/app-modularization/spec.md
 openspec/changes/comprehensive-project-refactor/specs/ddd-layered-architecture/spec.md
 openspec/changes/comprehensive-project-refactor/specs/shared-schemas-integration/spec.md
 openspec/changes/comprehensive-project-refactor/tasks.md
+.atl/skill-registry.md
+example/agents-ejemplo.md
+openspec/changes/client-appointments-portal/.openspec.yaml

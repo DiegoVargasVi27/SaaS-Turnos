@@ -34,6 +34,11 @@ if (config.enableCatalogDDD) {
   app.use("/public", catalogScheduling.publicRouter);
   app.use("/api/appointments/slots", catalogScheduling.slotsRouter);
   app.use("/api/appointments", catalogScheduling.appointmentRouter);
+
+  // Admin DDD routes (auth required — handled by controllers)
+  app.use("/api/services", catalogScheduling.serviceRouter);
+  app.use("/api/availability", catalogScheduling.availabilityRouter);
+  app.use("/api/admin/appointments", catalogScheduling.appointmentManagementRouter);
 } else {
   // Legacy public + scheduling routers
   app.use("/public", createPublicRouter());

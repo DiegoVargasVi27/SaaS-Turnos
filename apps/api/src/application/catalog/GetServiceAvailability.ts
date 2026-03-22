@@ -1,4 +1,4 @@
-import { CatalogServiceRepository } from "../../domain/catalog/repositories/CatalogServiceRepository";
+import { IServiceRepository } from "../../domain/catalog/repositories/IServiceRepository";
 import { ServiceId } from "../../domain/shared/types/ServiceId";
 import { CatalogError } from "./CatalogError";
 import { ServiceAvailabilityReader } from "../scheduling/ServiceAvailabilityReader";
@@ -19,7 +19,7 @@ export interface GetServiceAvailabilityResult {
 
 export class GetServiceAvailability {
   constructor(
-    private readonly catalogRepo: CatalogServiceRepository,
+    private readonly catalogRepo: IServiceRepository,
     private readonly availabilityReader: ServiceAvailabilityReader,
   ) {}
 

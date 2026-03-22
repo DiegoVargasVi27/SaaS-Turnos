@@ -1,4 +1,4 @@
-import { CatalogServiceRepository } from "../../domain/catalog/repositories/CatalogServiceRepository";
+import { IServiceRepository } from "../../domain/catalog/repositories/IServiceRepository";
 import { CatalogServicePublicDTO } from "../../dtos/catalog/CatalogServicePublicDTO";
 import { CatalogServicePublicAssembler } from "../../dtos/catalog/assemblers/CatalogServicePublicAssembler";
 import { CatalogError } from "./CatalogError";
@@ -20,7 +20,7 @@ export class ListCatalogServices {
   private readonly clock: () => Date;
 
   constructor(
-    private readonly catalogRepo: CatalogServiceRepository,
+    private readonly catalogRepo: IServiceRepository,
     private readonly availabilityReader: ServiceAvailabilityReader,
     clock?: () => Date,
   ) {
@@ -33,7 +33,7 @@ export class ListCatalogServices {
       throw new CatalogError("CATALOG_BUSINESS_NOT_FOUND", `Business ${query.businessSlug} not found`);
     }
 
-    const services = await this.catalogRepo.listActiveByBusinessId(business.id);
+    const services = await this.catalogRepo.findActiveByBusinessId(business.id);
     const includeAvailability = query.includeAvailability ?? false;
     const targetDate = query.date ?? this.clock();
     const slotsPerService = query.slotsPerService ?? 5;

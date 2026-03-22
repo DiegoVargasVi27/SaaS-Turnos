@@ -8,18 +8,30 @@ import { PrismaTokenRepository } from "../infrastructure/persistence/prisma/iden
 import { BcryptPasswordHasher } from "../infrastructure/security/BcryptPasswordHasher";
 import { JwtTokenService } from "../infrastructure/security/JwtTokenService";
 import { createIdentityRouter } from "../controllers/identity";
-import { PrismaCatalogServiceRepository } from "../infrastructure/persistence/prisma/catalog/PrismaCatalogServiceRepository";
+import { PrismaServiceRepository } from "../infrastructure/persistence/prisma/catalog/PrismaCatalogServiceRepository";
 import { PrismaAvailabilityRuleRepository } from "../infrastructure/persistence/prisma/scheduling/PrismaAvailabilityRuleRepository";
 import { PrismaAppointmentRepository } from "../infrastructure/persistence/prisma/scheduling/PrismaAppointmentRepository";
+import { PrismaGuestUserRegistrar } from "../infrastructure/persistence/prisma/scheduling/PrismaGuestUserRegistrar";
 import { SchedulingService } from "../domain/scheduling/services/SchedulingService";
 import { ServiceAvailabilityReader } from "../application/scheduling/ServiceAvailabilityReader";
 import { ListCatalogServices } from "../application/catalog/ListCatalogServices";
 import { GetServiceAvailability } from "../application/catalog/GetServiceAvailability";
 import { BookAppointment } from "../application/scheduling/BookAppointment";
+import { CreateService } from "../application/catalog/CreateService";
+import { ListServices } from "../application/catalog/ListServices";
+import { UpdateService } from "../application/catalog/UpdateService";
+import { DeleteService } from "../application/catalog/DeleteService";
+import { CreateAvailabilityRule } from "../application/scheduling/CreateAvailabilityRule";
+import { ListAvailabilityRules } from "../application/scheduling/ListAvailabilityRules";
+import { ListAppointments } from "../application/scheduling/ListAppointments";
+import { CancelAppointment } from "../application/scheduling/CancelAppointment";
 import {
   createCatalogPublicRouter,
+  createCatalogServiceRouter,
   createSchedulingAppointmentRouter,
   createSchedulingSlotsRouter,
+  createSchedulingAvailabilityRouter,
+  createSchedulingAppointmentManagementRouter,
 } from "../controllers";
 
 export interface ModuleContext {
@@ -66,7 +78,7 @@ export interface CatalogSchedulingModuleContext {
 }
 
 export function buildCatalogSchedulingModule(context: CatalogSchedulingModuleContext) {
-  const catalogRepo = new PrismaCatalogServiceRepository(context.prisma);
+  const catalogRepo = new PrismaServiceRepository(context.prisma);
   const availabilityRepo = new PrismaAvailabilityRuleRepository(context.prisma);
   const appointmentRepo = new PrismaAppointmentRepository(context.prisma);
   const schedulingService = new SchedulingService();
@@ -74,17 +86,36 @@ export function buildCatalogSchedulingModule(context: CatalogSchedulingModuleCon
 
   const listCatalogServices = new ListCatalogServices(catalogRepo, availabilityReader, context.clock);
   const getServiceAvailability = new GetServiceAvailability(catalogRepo, availabilityReader);
+  const guestUserRegistrar = new PrismaGuestUserRegistrar(context.prisma);
   const bookAppointment = new BookAppointment(
-    context.prisma,
     catalogRepo,
     availabilityRepo,
     appointmentRepo,
     schedulingService,
+    guestUserRegistrar,
   );
 
+  // Admin use cases — Catalog
+  const createService = new CreateService(catalogRepo);
+  const listServices = new ListServices(catalogRepo);
+  const updateService = new UpdateService(catalogRepo);
+  const deleteService = new DeleteService(catalogRepo);
+
+  // Admin use cases — Scheduling
+  const createAvailabilityRule = new CreateAvailabilityRule(availabilityRepo);
+  const listAvailabilityRules = new ListAvailabilityRules(availabilityRepo);
+  const listAppointments = new ListAppointments(appointmentRepo);
+  const cancelAppointment = new CancelAppointment(appointmentRepo);
+
   return {
+    // Public (no auth)
     publicRouter: createCatalogPublicRouter({ listCatalogServices }),
     slotsRouter: createSchedulingSlotsRouter({ getServiceAvailability }),
     appointmentRouter: createSchedulingAppointmentRouter({ bookAppointment }),
+
+    // Admin (auth required)
+    serviceRouter: createCatalogServiceRouter({ createService, listServices, updateService, deleteService }),
+    availabilityRouter: createSchedulingAvailabilityRouter({ createAvailabilityRule, listAvailabilityRules }),
+    appointmentManagementRouter: createSchedulingAppointmentManagementRouter({ listAppointments, cancelAppointment }),
   };
 }

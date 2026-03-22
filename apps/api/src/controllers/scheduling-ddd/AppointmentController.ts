@@ -55,6 +55,10 @@ export function createSchedulingAppointmentRouter(
             SCHEDULING_BUSINESS_NOT_FOUND: 404,
             SCHEDULING_SERVICE_INACTIVE: 409,
             SCHEDULING_SLOT_TAKEN: 409,
+            SCHEDULING_APPOINTMENT_NOT_FOUND: 404,
+            SCHEDULING_APPOINTMENT_NOT_CANCELLABLE: 409,
+            SCHEDULING_INVALID_AVAILABILITY_DATA: 400,
+            SCHEDULING_AVAILABILITY_RULE_NOT_FOUND: 404,
           };
           sendError(res, statusMap[error.code] ?? 400, error.code, error.message);
           return;

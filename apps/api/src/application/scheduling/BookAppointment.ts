@@ -1,7 +1,5 @@
-import { Prisma, PrismaClient, Role } from "@prisma/client";
-import { CatalogServiceRepository } from "../../domain/catalog/repositories/CatalogServiceRepository";
+import { IServiceRepository } from "../../domain/catalog/repositories/IServiceRepository";
 import { ServiceId } from "../../domain/shared/types/ServiceId";
-import { UserId } from "../../domain/shared/types/UserId";
 import { WeekDay } from "../../domain/scheduling/entities/availability/WeekDay";
 import { Appointment } from "../../domain/scheduling/entities/appointment/Appointment";
 import { TimeSlot } from "../../domain/scheduling/entities/appointment/TimeSlot";
@@ -10,12 +8,11 @@ import { IAvailabilityRuleRepository } from "../../domain/scheduling/repositorie
 import { IAppointmentRepository } from "../../domain/scheduling/repositories/IAppointmentRepository";
 import { SlotOutsideAvailabilityException } from "../../domain/scheduling/exceptions/SlotOutsideAvailabilityException";
 import { AppointmentOverlapException } from "../../domain/scheduling/exceptions/AppointmentOverlapException";
+import { GuestUserRegistrar } from "../../domain/scheduling/ports/GuestUserRegistrar";
 import { AppointmentDTO } from "../../dtos/scheduling/AppointmentDTO";
 import { AppointmentDTOAssembler } from "../../dtos/scheduling/assemblers/AppointmentDTOAssembler";
 import { CatalogError } from "../catalog/CatalogError";
 import { SchedulingError } from "./SchedulingError";
-import { hashPassword } from "../../lib/auth";
-import { AppointmentDataAssembler } from "../../infrastructure/persistence/prisma/assemblers/AppointmentDataAssembler";
 
 export interface BookAppointmentCommand {
   businessSlug: string;
@@ -27,14 +24,12 @@ export interface BookAppointmentCommand {
 }
 
 export class BookAppointment {
-  private readonly appointmentAssembler = new AppointmentDataAssembler();
-
   constructor(
-    private readonly prisma: PrismaClient,
-    private readonly catalogRepo: CatalogServiceRepository,
+    private readonly catalogRepo: IServiceRepository,
     private readonly availabilityRepo: IAvailabilityRuleRepository,
     private readonly appointmentRepo: IAppointmentRepository,
     private readonly schedulingService: SchedulingService,
+    private readonly guestUserRegistrar: GuestUserRegistrar,
   ) {}
 
   async execute(command: BookAppointmentCommand): Promise<AppointmentDTO> {
@@ -84,63 +79,24 @@ export class BookAppointment {
       throw error;
     }
 
-    const fallbackPassword = await hashPassword(`client-${Date.now()}-${Math.random()}`);
+    // Delegate guest user creation/lookup to the ACL port
+    const clientUserId = await this.guestUserRegistrar.ensureGuestUser(
+      business.id,
+      {
+        email: command.clientEmail,
+        fullName: command.clientName,
+        phone: command.clientPhone,
+      },
+    );
 
-    try {
-      const appointmentRecord = await this.prisma.$transaction(async (tx) => {
-        const clientUser = await tx.user.upsert({
-          where: { email: command.clientEmail },
-          update: {
-            fullName: command.clientName,
-            phone: command.clientPhone,
-          },
-          create: {
-            email: command.clientEmail,
-            fullName: command.clientName,
-            phone: command.clientPhone,
-            passwordHash: fallbackPassword,
-          },
-        });
+    const appointment = Appointment.create(
+      business.id,
+      service.id,
+      clientUserId,
+      slot,
+    );
 
-        await tx.businessUser.upsert({
-          where: {
-            businessId_userId: {
-              businessId: business.id.value,
-              userId: clientUser.id,
-            },
-          },
-          update: {},
-          create: {
-            businessId: business.id.value,
-            userId: clientUser.id,
-            role: Role.CLIENT,
-          },
-        });
-
-        const appointmentEntity = Appointment.create(
-          business.id,
-          service.id,
-          UserId.fromString(clientUser.id),
-          slot,
-        );
-
-        const data = this.appointmentAssembler.toData(appointmentEntity);
-
-        return tx.appointment.create({ data });
-      });
-
-      const appointment = this.appointmentAssembler.toDomain(appointmentRecord);
-      return AppointmentDTOAssembler.toDTO(appointment);
-    } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2002" &&
-        Array.isArray(error.meta?.target) &&
-        (error.meta?.target as string[]).includes("serviceId_startsAt")
-      ) {
-        throw new SchedulingError("SCHEDULING_SLOT_TAKEN", "Requested slot already booked");
-      }
-      throw error;
-    }
+    await this.appointmentRepo.save(appointment);
+    return AppointmentDTOAssembler.toDTO(appointment);
   }
 }
