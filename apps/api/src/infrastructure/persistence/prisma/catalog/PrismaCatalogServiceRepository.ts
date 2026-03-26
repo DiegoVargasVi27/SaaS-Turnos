@@ -116,9 +116,3 @@ export class PrismaServiceRepository implements IServiceRepository {
     return count > 0;
   }
 }
-
-/**
- * @deprecated Use PrismaServiceRepository instead.
- * Kept as alias for backward compatibility during migration.
- */
-export const PrismaCatalogServiceRepository = PrismaServiceRepository;
