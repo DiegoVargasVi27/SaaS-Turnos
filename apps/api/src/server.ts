@@ -3,14 +3,6 @@ import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
 import { config } from "./config";
-import {
-  createServiceRouter,
-  createSlotsRouter,
-  createAppointmentRouter,
-  createAuthRouter,
-  createAvailabilityRouter,
-  createPublicRouter,
-} from "./controllers";
 import { buildCatalogSchedulingModule, buildIdentityModule } from "./composition";
 import { prisma } from "./lib/prisma";
 import { sendError } from "./lib/http";
@@ -23,39 +15,22 @@ app.use(morgan("dev"));
 app.use(express.json());
 
 // ============================================================================
-// Route Controllers
+// Route Controllers — DDD Composition Root
 // ============================================================================
 
-// Catalog bounded context
-app.use("/api/services", createServiceRouter());
+// Identity bounded context
+const identityModule = buildIdentityModule({ prisma, refreshTokenTtlDays: config.refreshTokenTtlDays });
+app.use("/api/identity", identityModule.router);
+app.use("/auth", identityModule.router);
 
-if (config.enableCatalogDDD) {
-  const catalogScheduling = buildCatalogSchedulingModule({ prisma });
-  app.use("/public", catalogScheduling.publicRouter);
-  app.use("/api/appointments/slots", catalogScheduling.slotsRouter);
-  app.use("/api/appointments", catalogScheduling.appointmentRouter);
-
-  // Admin DDD routes (auth required — handled by controllers)
-  app.use("/api/services", catalogScheduling.serviceRouter);
-  app.use("/api/availability", catalogScheduling.availabilityRouter);
-  app.use("/api/admin/appointments", catalogScheduling.appointmentManagementRouter);
-} else {
-  // Legacy public + scheduling routers
-  app.use("/public", createPublicRouter());
-  app.use("/api/appointments/slots", createSlotsRouter());
-  app.use("/api/appointments", createAppointmentRouter());
-}
-
-if (config.enableIdentityDDD) {
-  const identityModule = buildIdentityModule({ prisma, refreshTokenTtlDays: config.refreshTokenTtlDays });
-  app.use("/api/identity", identityModule.router);
-  app.use("/auth", identityModule.router);
-} else {
-  app.use("/auth", createAuthRouter());
-}
-
-// Availability bounded context
-app.use("/api/availability", createAvailabilityRouter());
+// Catalog + Scheduling bounded contexts
+const catalogScheduling = buildCatalogSchedulingModule({ prisma });
+app.use("/public", catalogScheduling.publicRouter);
+app.use("/api/appointments/slots", catalogScheduling.slotsRouter);
+app.use("/api/appointments", catalogScheduling.appointmentRouter);
+app.use("/api/services", catalogScheduling.serviceRouter);
+app.use("/api/availability", catalogScheduling.availabilityRouter);
+app.use("/api/admin/appointments", catalogScheduling.appointmentManagementRouter);
 
 // Health Check
 app.get("/health", (_req, res) => {
