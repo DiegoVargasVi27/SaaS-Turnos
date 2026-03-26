@@ -1,1 +1,0 @@
-export { createAvailabilityRouter } from "./AvailabilityController";

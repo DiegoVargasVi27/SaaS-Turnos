@@ -1,1 +1,0 @@
-export { createAuthRouter } from "./AuthController";
